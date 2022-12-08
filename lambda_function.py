@@ -11,7 +11,7 @@ def lambda_handler(event, context):
           "model": "text-davinci-003",
           "prompt": event.message.text,
           "temperature": 0.5,
-          "max_tokens": 150,
+          "max_tokens": 2048,
           "top_p": 0.3,
           "frequency_penalty": 0.5,
           "presence_penalty": 0.0})
