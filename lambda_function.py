@@ -11,18 +11,20 @@ line_bot_api = LineBotApi(LINE_CHANNEL_ACCESS_TOKEN)
 handler = WebhookHandler(LINE_CHANNEL_SECRET)
 @handler.add(MessageEvent, message=TextMessage)
 def message_text(event):
+    prompt = event.message.text
     payload = json.dumps({
         "model": "text-davinci-003",
-        "prompt": event.message.text,
+        "prompt": prompt,
         "temperature": 0.5,
         "max_tokens": 2048,
         "top_p": 0.3,
         "frequency_penalty": 0.5,
         "presence_penalty": 0.0})
     r = requests.post(openai_api, headers=headers, data=payload)
+    completion = json.loads(r.text)['choices'][0]['text'].strip()
     line_bot_api.reply_message(
         event.reply_token,
-        TextSendMessage(text=json.loads(r.text)['choices'][0]['text'].strip())
+        TextSendMessage(text=completion)
     )
 
 import requests
