@@ -20,6 +20,7 @@ def message_text(event):
         frequency_penalty=0.5,
         presence_penalty=0.0)
     completion = response.choices[0]
+    completion.text = completion.text.strip()
     line_bot_api.reply_message(
         event.reply_token,
         TextSendMessage(text=completion.text)
