@@ -11,7 +11,7 @@ line_bot_api = LineBotApi(LINE_CHANNEL_ACCESS_TOKEN)
 handler = WebhookHandler(LINE_CHANNEL_SECRET)
 @handler.add(MessageEvent, message=TextMessage)
 def message_text(event):
-    prompt = event.message.text
+    prompt = event.message.text + '?'
     payload = json.dumps({
         "model": "text-davinci-003",
         "prompt": prompt,
