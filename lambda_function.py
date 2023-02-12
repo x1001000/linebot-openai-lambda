@@ -15,7 +15,7 @@ def message_text(event):
         model="text-davinci-003",
         prompt=f'GPT-1000是串接OpenAI API的LINE機器人，所使用的語言模型GPT-3只有2021年以前的知識。GPT-1000目前不提供連續問答，made in 十百千實驗室 by Phil Alive。\n使用者問：{event.message.text}\nGPT-1000答：',
         temperature=0.5,
-        max_tokens=2048,
+        max_tokens=4000,
         top_p=0.3,
         frequency_penalty=0.5,
         presence_penalty=0.0)
