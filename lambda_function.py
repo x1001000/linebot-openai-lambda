@@ -26,7 +26,7 @@ def message_text(event):
         event.reply_token,
         TextSendMessage(text=completion.text)
     )
-    preprompt[event.source.user_id] = f'{prompt}{completion.text}\n'
+    preprompt[event.source.user_id] = f'{prompt}{completion.text}\n'[-(4097-1024)//2:]
 
 preprompt = {}
 
