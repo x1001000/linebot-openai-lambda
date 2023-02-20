@@ -10,7 +10,7 @@ from linebot.models import (
 line_bot_api = LineBotApi(LINE_CHANNEL_ACCESS_TOKEN)
 handler = WebhookHandler(LINE_CHANNEL_SECRET)
 @handler.add(MessageEvent, message=TextMessage)
-def message_text(event):
+def handle_text_message(event):
     prompt = preprompt.get(event.source.user_id, 'GPT-1000是串接OpenAI API的LINE機器人，所使用的語言模型GPT-3只有2021年以前的知識，made in 十百千實驗室 by Phil Alive。\n') + f'使用者問：{event.message.text}\nGPT-1000答：'
     response = openai.Completion.create(
         model="text-davinci-003",
