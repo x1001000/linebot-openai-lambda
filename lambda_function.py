@@ -21,13 +21,16 @@ def handle_text_message(event):
                 'https://i.imgur.com/PdTJwFZ.jpg')
         )
         return
-    if balance <= 0:
+    if balance < 0:
+        return
+    if balance == 0:
         line_bot_api.reply_message(
             event.reply_token,
             ImageSendMessage(
                 'https://raw.githubusercontent.com/x1001000/linebot-openai-lambda/main/hastalavista.jpeg',
                 'https://raw.githubusercontent.com/x1001000/linebot-openai-lambda/main/hastalavista-580x326.jpeg')
         )
+        gas('charge', event.source.user_id)
         return
     prompt = preprompt.get(event.source.user_id, 'GPT-1000是串接OpenAI API的LINE機器人，只提供使用者三次免費問答，made in 十百千實驗室 by Phil Alive。\n') + f'使用者問：{event.message.text}\nGPT-1000答：'
     try:
@@ -50,7 +53,7 @@ def handle_text_message(event):
     completion = response.choices[0]
     completion.text = completion.text.strip()
     balance = int(gas('charge', event.source.user_id))
-    reminder = '\n\n' + ['3Q, no more.', '拉死抖☝️', '您還可以問我✌️個問題️'][balance] if balance < 3 else ''
+    reminder = '\n\n' + ['3Q, no more.', '拉s抖☝️', '您還可以問我✌️個問題️'][balance] if balance < 3 else ''
     line_bot_api.reply_message(
         event.reply_token,
         TextSendMessage(text=completion.text + reminder)
