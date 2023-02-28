@@ -12,15 +12,10 @@ line_bot_api = LineBotApi(LINE_CHANNEL_ACCESS_TOKEN)
 handler = WebhookHandler(LINE_CHANNEL_SECRET)
 @handler.add(MessageEvent, message=TextMessage)
 def handle_text_message(event):
+    if event.source.type == 'group':
+        if not re.search('[Tt]-?1000', event.message.text):
+            return
     balance = int(gas('check', event.source.user_id))
-    if '餘額' in event.message.text:
-        line_bot_api.reply_message(
-            event.reply_token,
-            ImageSendMessage(
-                'https://memeprod.sgp1.digitaloceanspaces.com/user-wtf/1664586622774.jpg',
-                'https://i.imgur.com/PdTJwFZ.jpg')
-        )
-        return
     if balance < 0:
         return
     if balance == 0:
