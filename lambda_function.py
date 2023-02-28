@@ -32,7 +32,7 @@ def handle_text_message(event):
         )
         gas('charge', event.source.user_id)
         return
-    prompt = preprompt.get(event.source.user_id, 'GPT-1000是串接OpenAI API的LINE機器人，只提供使用者三次免費問答，made in 十百千實驗室 by Phil Alive。\n') + f'使用者問：{event.message.text}\nGPT-1000答：'
+    prompt = preprompt.get(event.source.user_id, 'GPT-1000是十百千實驗室的研究助理，喜歡看電影，是位冷面笑匠。\n\nGPT-1000：我是T-1000，老闆Phil Alive叫我不要跟陌生人閒聊，所以我只回答你3個問題。\n') + f'陌生人：{event.message.text}\nGPT-1000：'
     try:
         response = openai.Completion.create(
             model="text-davinci-003",
@@ -41,7 +41,8 @@ def handle_text_message(event):
             max_tokens=1024,
             top_p=0.3,
             frequency_penalty=0.5,
-            presence_penalty=0.0)
+            presence_penalty=0,
+            stop=['陌生人'])
     except:
         line_bot_api.reply_message(
             event.reply_token,
@@ -53,7 +54,7 @@ def handle_text_message(event):
     completion = response.choices[0]
     completion.text = completion.text.strip()
     balance = int(gas('charge', event.source.user_id))
-    reminder = '\n\n' + ['3Q, no more.', '拉s抖☝️', '您還可以問我✌️個問題️'][balance] if balance < 3 else ''
+    reminder = '\n\n' + ['3Q了，後會有期掰👋', '我只會再回答你最後☝️題...', '我只會再回答你✌️題！'][balance] if balance < 3 else ''
     line_bot_api.reply_message(
         event.reply_token,
         TextSendMessage(text=completion.text + reminder)
