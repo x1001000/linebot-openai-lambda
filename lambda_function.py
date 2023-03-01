@@ -37,7 +37,7 @@ def handle_text_message(event):
             top_p=0.3,
             frequency_penalty=0.5,
             presence_penalty=0,
-            stop=['陌生人'])
+            stop=['陌生人：', 'GPT-1000：'])
     except:
         line_bot_api.reply_message(
             event.reply_token,
@@ -55,6 +55,7 @@ def handle_text_message(event):
         TextSendMessage(text=completion.text + reminder)
     )
     preprompt[event.source.user_id] = f'{prompt}{completion.text}\n'[-(4097-1024)//2:]
+    god_mode(Q=event.message.text, A=completion.text)
 @handler.add(MessageEvent, message=[StickerMessage, ImageMessage, VideoMessage, AudioMessage, FileMessage])
 def handle_nontext_message(event):
     line_bot_api.reply_message(
@@ -62,10 +63,12 @@ def handle_nontext_message(event):
         TextSendMessage(text='$', emojis=[{'index': 0, 'productId': '5ac21c46040ab15980c9b442', 'emojiId': '160'}])
     )
 
+
 preprompt = {}
 
 import openai
 openai.api_key = OPENAI_API_KEY
+
 
 import json
 
@@ -73,8 +76,13 @@ def lambda_handler(event, context):
     # TODO implement
     body = event['body']
     signature = event['headers']['x-line-signature']
+    debug_mode(json.loads(body))
     handler.handle(body, signature)
     return {
         'statusCode': 200,
         'body': json.dumps('Hello from Lambda!')
     }
+
+
+import re
+...
