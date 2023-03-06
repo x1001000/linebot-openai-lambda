@@ -17,7 +17,8 @@ def handle_text_message(event):
         if not re.search('[Tt]-?1000', event.message.text):
             return
         event_id = event.source.group_id
-    balance = int(gas('check', event.source.user_id))
+    playground_mode = True if event_id in playground else False
+    balance = int(gas('check', event.source.user_id)) if not playground_mode else 1001000
     if balance < 0:
         return
     if balance == 0:
@@ -45,7 +46,7 @@ def handle_text_message(event):
         )
         return
     assistant_reply = response['choices'][0]['message']['content'].strip()
-    balance = int(gas('charge', event.source.user_id))
+    balance = int(gas('charge', event.source.user_id)) if not playground_mode else 1001000
     reminder = '\n\n' + ['3Q了，後會有期掰👋', '今天我只能再回答你最後☝️題！', '今天我還能回答你✌️題！'][balance] if balance < 3 else ''
     line_bot_api.reply_message(
         event.reply_token,
@@ -62,10 +63,10 @@ def handle_sticker_message(event):
     )
 
 
-prompts = {}
-
 import openai
 openai.api_key = OPENAI_API_KEY
+prompts = {}
+playground = ['C4a903e232adb3dae7eec7e63220dc23f', 'Ce5ab141f09651f2920fc0d85baaa2816']
 
 
 import json
@@ -82,5 +83,6 @@ def lambda_handler(event, context):
     }
 
 
+import requests
 import re
 ...
