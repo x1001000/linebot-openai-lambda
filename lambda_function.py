@@ -12,9 +12,11 @@ line_bot_api = LineBotApi(LINE_CHANNEL_ACCESS_TOKEN)
 handler = WebhookHandler(LINE_CHANNEL_SECRET)
 @handler.add(MessageEvent, message=TextMessage)
 def handle_text_message(event):
+    event_id = event.source.user_id
     if event.source.type == 'group':
         if not re.search('[Tt]-?1000', event.message.text):
             return
+        event_id = event.source.group_id
     balance = int(gas('check', event.source.user_id))
     if balance < 0:
         return
@@ -27,17 +29,13 @@ def handle_text_message(event):
         )
         gas('charge', event.source.user_id)
         return
-    prompt = preprompt.get(event.source.user_id, 'GPT-1000是十百千實驗室的研究助理，喜歡看電影，是位冷面笑匠。\n\nGPT-1000：我是T-1000，老闆Phil Alive叫我不要跟陌生人閒聊，所以我只回答你3個問題。\n') + f'陌生人：{event.message.text}\nGPT-1000：'
+    preprompt = [{"role": "system", "content": "ChatGPT-1000代號T-1000，是十百千實驗室的研究助理，也是PHIL老闆的特助，擅長使用暴力解決問題，不擅長使用簡體中文回答，喜歡看電影，是位外表看起來跟笑話一樣冷的冷面笑匠。"}]
+    prompt = prompts.get(event_id, [])
+    prompt.append({"role": "user", "content": event.message.text})
     try:
-        response = openai.Completion.create(
-            model="text-davinci-003",
-            prompt=prompt,
-            temperature=0.5,
-            max_tokens=1024,
-            top_p=0.3,
-            frequency_penalty=0.5,
-            presence_penalty=0,
-            stop=['陌生人：', 'GPT-1000：'])
+        response = openai.ChatCompletion.create(
+            model="gpt-3.5-turbo",
+            messages=preprompt + prompt)
     except:
         line_bot_api.reply_message(
             event.reply_token,
@@ -46,25 +44,25 @@ def handle_text_message(event):
                 'https://phoneky.co.uk/thumbs/screensavers/down/abstract/systemcras_ncl37enz.gif')
         )
         return
-    completion = response.choices[0]
-    completion.text = completion.text.strip()
+    assistant_reply = response['choices'][0]['message']['content'].strip()
     balance = int(gas('charge', event.source.user_id))
-    reminder = '\n\n' + ['3Q了，後會有期掰👋', '我只會再回答你最後☝️題...', '我只會再回答你✌️題！'][balance] if balance < 3 else ''
+    reminder = '\n\n' + ['3Q了，後會有期掰👋', '今天我只能再回答你最後☝️題！', '今天我還能回答你✌️題！'][balance] if balance < 3 else ''
     line_bot_api.reply_message(
         event.reply_token,
-        TextSendMessage(text=completion.text + reminder)
+        TextSendMessage(text=assistant_reply + reminder)
     )
-    preprompt[event.source.user_id] = f'{prompt}{completion.text}\n'[-(4097-1024)//2:]
-    god_mode(Q=event.message.text, A=completion.text)
-@handler.add(MessageEvent, message=[StickerMessage, ImageMessage, VideoMessage, AudioMessage, FileMessage])
-def handle_nontext_message(event):
+    prompt.append({"role": "assistant", "content": assistant_reply})
+    prompts[event_id] = prompt[-12:]
+    god_mode(Q=event.message.text, A=assistant_reply)
+@handler.add(MessageEvent, message=StickerMessage)
+def handle_sticker_message(event):
     line_bot_api.reply_message(
         event.reply_token,
         TextSendMessage(text='$', emojis=[{'index': 0, 'productId': '5ac21c46040ab15980c9b442', 'emojiId': '160'}])
     )
 
 
-preprompt = {}
+prompts = {}
 
 import openai
 openai.api_key = OPENAI_API_KEY
