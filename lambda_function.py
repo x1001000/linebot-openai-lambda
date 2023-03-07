@@ -13,10 +13,13 @@ handler = WebhookHandler(LINE_CHANNEL_SECRET)
 @handler.add(MessageEvent, message=TextMessage)
 def handle_text_message(event):
     event_id = event.source.user_id
-    if event.source.type == 'group':
+    if event.source.type != 'user':
         if not re.search('[Tt]-?1000', event.message.text):
             return
-        event_id = event.source.group_id
+        if event.source.type == 'group':
+            event_id = event.source.group_id
+        if event.source.type == 'room':
+            event_id = event.source.room_id
     playground_mode = True if event_id in playground else False
     balance = int(gas('check', event.source.user_id)) if not playground_mode else 1001000
     if balance < 0:
