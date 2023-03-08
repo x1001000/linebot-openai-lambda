@@ -1,3 +1,8 @@
+...
+
+
+import re, requests
+
 from linebot import (
     LineBotApi, WebhookHandler
 )
@@ -20,7 +25,7 @@ def handle_text_message(event):
             event_id = event.source.group_id
         if event.source.type == 'room':
             event_id = event.source.room_id
-    playground_mode = True if event_id in playground else False
+    playground_mode = True #if event_id in playground else False
     balance = int(gas('check', event.source.user_id)) if not playground_mode else 1001000
     if balance < 0:
         return
@@ -40,6 +45,14 @@ def handle_text_message(event):
         response = openai.ChatCompletion.create(
             model="gpt-3.5-turbo",
             messages=preprompt + prompt)
+    except (openai.error.RateLimitError, openai.error.AuthenticationError) as e:
+        openai.api_key = OPENAI_API_KEY('new')
+        requests.post(line_notify_api, headers=header, data={'message': e})
+        line_bot_api.reply_message(
+            event.reply_token,
+            TextSendMessage(text='對不起，我恍神了，你說什麼？')
+        )
+        return
     except:
         line_bot_api.reply_message(
             event.reply_token,
@@ -67,7 +80,7 @@ def handle_sticker_message(event):
 
 
 import openai
-openai.api_key = OPENAI_API_KEY
+openai.api_key = OPENAI_API_KEY()
 prompts = {}
 playground = ['C4a903e232adb3dae7eec7e63220dc23f', 'Ce5ab141f09651f2920fc0d85baaa2816']
 
@@ -86,6 +99,4 @@ def lambda_handler(event, context):
     }
 
 
-import requests
-import re
 ...
