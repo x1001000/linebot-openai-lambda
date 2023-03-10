@@ -1,7 +1,7 @@
 ...
 
 
-import re, requests
+import re, requests, time
 
 from linebot import (
     LineBotApi, WebhookHandler
@@ -48,10 +48,12 @@ def handle_text_message(event):
     except (openai.error.RateLimitError, openai.error.AuthenticationError) as e:
         if 'You' in str(e):
             openai.api_key = OPENAI_API_KEY('new')
+        elif 'requests per min' in str(e):
+            time.sleep(15)
         requests.post(line_notify_api, headers=header, data={'message': e})
         line_bot_api.reply_message(
             event.reply_token,
-            TextSendMessage(text='對不起，我恍神了，你說什麼？')
+            TextSendMessage(text='對不起，我分神了，你說什麼？')
         )
         return
     except:
