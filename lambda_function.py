@@ -39,7 +39,7 @@ def handle_text_message(event):
         gas('charge', event.source.user_id)
         return
     preprompt = [{"role": "system", "content": "ChatGPT-1000代號T-1000，是十百千實驗室的研究助理，也是PHIL老闆的特助，擅長使用暴力解決問題，不擅長使用簡體中文回答，喜歡看電影，是位外表看起來跟笑話一樣冷的冷面笑匠。"}]
-    prompt = prompts.get(event_id, [])
+    prompt = prompts.get(event_id, [{"role": "assistant", "content": '我是ChatGPT-1000，代號T-1000，在群組中有叫到我才會回。老闆叫我不要一直聊天，但他人很好又很帥，所以沒關係！🤗'}])
     prompt.append({"role": "user", "content": event.message.text})
     try:
         response = openai.ChatCompletion.create(
@@ -72,7 +72,7 @@ def handle_text_message(event):
         TextSendMessage(text=assistant_reply + reminder)
     )
     prompt.append({"role": "assistant", "content": assistant_reply})
-    prompts[event_id] = prompt[-12:]
+    prompts[event_id] = prompt[-13:]
     god_mode(Q=event.message.text, A=assistant_reply)
 @handler.add(MessageEvent, message=StickerMessage)
 def handle_sticker_message(event):
