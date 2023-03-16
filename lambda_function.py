@@ -78,7 +78,7 @@ def handle_text_message(event):
 def handle_sticker_message(event):
     line_bot_api.reply_message(
         event.reply_token,
-        TextSendMessage(text='$', emojis=[{'index': 0, 'productId': '5ac21c46040ab15980c9b442', 'emojiId': '160'}])
+        TextSendMessage(text='$', emojis=[{'index': 0, 'productId': '5ac21c46040ab15980c9b442', 'emojiId': '138'}])
     )
 
 
