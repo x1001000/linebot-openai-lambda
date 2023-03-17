@@ -46,14 +46,14 @@ def handle_text_message(event):
             model="gpt-3.5-turbo",
             messages=preprompt + prompt)
     except (openai.error.RateLimitError, openai.error.AuthenticationError) as e:
-        if 'request' in str(e):
+        if 'overloaded' in str(e):
             time.sleep(15)
         elif 'You' in str(e):
             openai.api_key = OPENAI_API_KEY('new')
         requests.post(line_notify_api, headers=header, data={'message': e})
         line_bot_api.reply_message(
             event.reply_token,
-            TextSendMessage(text='對不起，我分神了，你說什麼？')
+            TextSendMessage(text='牛仔很忙，不好意思，請再說一次！')
         )
         return
     except:
