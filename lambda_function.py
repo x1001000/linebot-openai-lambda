@@ -42,9 +42,19 @@ def handle_text_message(event):
     prompt = prompts.get(event_id, [{"role": "assistant", "content": '我是ChatGPT-1000，代號T-1000，在群組中有叫到我才會回。老闆叫我不要一直聊天，但他人很好又很帥，所以沒關係！🤗'}])
     prompt.append({"role": "user", "content": event.message.text})
     try:
+        global model
         response = openai.ChatCompletion.create(
-            model="gpt-3.5-turbo",
+            model=model,
             messages=preprompt + prompt)
+    except openai.error.InvalidRequestError as e:
+        if 'The model: `gpt-4` does not exist' in str(e):
+            model = 'gpt-3.5-turbo'
+        requests.post(line_notify_api, headers=header, data={'message': e})
+        line_bot_api.reply_message(
+            event.reply_token,
+            TextSendMessage(text='我恍神了，不好意思，請再說一次！')
+        )
+        return
     except (openai.error.RateLimitError, openai.error.AuthenticationError) as e:
         if 'overloaded' in str(e):
             time.sleep(15)
@@ -84,6 +94,7 @@ def handle_sticker_message(event):
 
 import openai
 openai.api_key = OPENAI_API_KEY()
+model = 'gpt-4'
 prompts = {}
 playground = ['C4a903e232adb3dae7eec7e63220dc23f', 'Ce5ab141f09651f2920fc0d85baaa2816']
 
