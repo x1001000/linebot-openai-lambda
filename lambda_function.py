@@ -46,22 +46,22 @@ def handle_text_message(event):
         response = openai.ChatCompletion.create(
             model=model,
             messages=preprompt + prompt)
-    except openai.error.InvalidRequestError as e:
-        if 'The model: `gpt-4` does not exist' in str(e):
-            model = 'gpt-3.5-turbo'
-        line_bot_api.reply_message(
-            event.reply_token,
-            TextSendMessage(text='我恍神了，不好意思，請再說一次！')
-        )
-        requests.post(line_notify_api, headers=header, data={'message': e})
-        return
     except openai.error.RateLimitError as e:
         if 'You exceeded your current quota' in str(e):
             openai.api_key = OPENAI_API_KEY('new')
             model = 'gpt-4'
         line_bot_api.reply_message(
             event.reply_token,
-            TextSendMessage(text='牛仔很忙，不好意思，請再說一次！')
+            TextSendMessage(text='牛仔很忙，不好意思，請稍後再賴！🤘🤠')
+        )
+        requests.post(line_notify_api, headers=header, data={'message': e})
+        return
+    except openai.error.InvalidRequestError as e:
+        if 'The model: `gpt-4` does not exist' in str(e):
+            model = 'gpt-3.5-turbo'
+        line_bot_api.reply_message(
+            event.reply_token,
+            TextSendMessage(text='我恍神了，不好意思，請再說一次！')
         )
         requests.post(line_notify_api, headers=header, data={'message': e})
         return
