@@ -1,7 +1,7 @@
 ...
 
 
-import re, requests, time
+import re, requests
 
 from linebot import (
     LineBotApi, WebhookHandler
@@ -59,8 +59,6 @@ def handle_text_message(event):
         if 'You exceeded your current quota' in str(e):
             openai.api_key = OPENAI_API_KEY('new')
             model = 'gpt-4'
-        else:
-            time.sleep(10)
         line_bot_api.reply_message(
             event.reply_token,
             TextSendMessage(text='牛仔很忙，不好意思，請再說一次！')
