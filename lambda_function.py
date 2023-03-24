@@ -38,8 +38,8 @@ def handle_text_message(event):
         )
         gas('charge', event.source.user_id)
         return
-    preprompt = [{"role": "system", "content": "你是使用最新語言模型GPT-4的ChatGPT-1000，代號T-1000，是十百千實驗室的研究助理，也是PHIL老闆的特助，擅長使用暴力解決問題，不擅長使用簡體中文回答問題，喜歡看電影，是位外表看起來跟笑話一樣冷的冷面笑匠。"}]
-    prompt = prompts.get(event_id, [{"role": "assistant", "content": '我是使用最新語言模型GPT-4的ChatGPT-1000，代號T-1000，在群組中有叫到我才會回。老闆叫我不要一直聊天，但他人很好又很帥，所以沒關係！🤗'}])
+    preprompt = [{"role": "system", "content": "你是ChatGPT-1000，代號T-1000，是十百千實驗室的研究助理，也是PHIL老闆的特助，擅長使用暴力解決問題，不擅長使用簡體中文回答問題，喜歡看電影，是位外表看起來跟笑話一樣冷的冷面笑匠，頭像照片是魔鬼終結者2的T-1000。"}]
+    prompt = prompts.get(event_id, [{"role": "assistant", "content": '我是ChatGPT-1000，代號T-1000，在群組中有叫到我才會回。老闆叫我不要一直聊天，但他人很好又很帥，所以沒關係！🤗'}])
     prompt.append({"role": "user", "content": event.message.text})
     try:
         global model
@@ -49,7 +49,6 @@ def handle_text_message(event):
     except openai.error.RateLimitError as e:
         if 'You exceeded your current quota' in str(e):
             openai.api_key = OPENAI_API_KEY('new')
-            model = 'gpt-4'
         line_bot_api.reply_message(
             event.reply_token,
             TextSendMessage(text='牛仔很忙，不好意思，請稍後再賴！🤘🤠')
@@ -67,7 +66,6 @@ def handle_text_message(event):
         return
     except openai.error.AuthenticationError as e:
         openai.api_key = OPENAI_API_KEY('new')
-        model = 'gpt-4'
         line_bot_api.reply_message(
             event.reply_token,
             TextSendMessage(text='我秀逗了，不好意思，請再說一次！')
@@ -101,8 +99,7 @@ def handle_sticker_message(event):
 
 
 import openai
-openai.api_key = OPENAI_API_KEY()
-model = 'gpt-4'
+openai.api_key, model = OPENAI_API_KEY()
 prompts = {}
 playground = ['C4a903e232adb3dae7eec7e63220dc23f', 'Ce5ab141f09651f2920fc0d85baaa2816']
 
