@@ -69,7 +69,7 @@ def handle_text_message(event):
         assistant_reply += '\n\n' + ['3Q了，後會有期掰👋', '今天我只能再回答你最後☝️題！', '今天我還能回答你✌️題！'][balance] if balance < 3 else ''
     finally:
         prompt.append({"role": "assistant", "content": assistant_reply})
-        prompts[event_id] = prompt[-11:]
+        prompts[event_id] = prompt[-10:]
         god_mode(Q=event.message.text, A=assistant_reply)
         line_bot_api.reply_message(
             event.reply_token,
