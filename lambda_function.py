@@ -49,47 +49,32 @@ def handle_text_message(event):
     except openai.error.RateLimitError as e:
         if 'You exceeded your current quota' in str(e):
             openai.api_key = OPENAI_API_KEY('new')
-        line_bot_api.reply_message(
-            event.reply_token,
-            TextSendMessage(text='牛仔很忙，不好意思，請稍後再賴！🤘🤠')
-        )
         requests.post(line_notify_api, headers=header, data={'message': e})
-        return
+        assistant_reply = '牛仔很忙，不好意思，請稍後再賴！🤘🤠'
     except openai.error.InvalidRequestError as e:
         if 'The model: `gpt-4` does not exist' in str(e):
             model = 'gpt-3.5-turbo'
-        line_bot_api.reply_message(
-            event.reply_token,
-            TextSendMessage(text='我恍神了，不好意思，請再說一次！')
-        )
         requests.post(line_notify_api, headers=header, data={'message': e})
-        return
+        assistant_reply = '我太難了，不好意思，請再說一次！'
     except openai.error.AuthenticationError as e:
         openai.api_key = OPENAI_API_KEY('new')
-        line_bot_api.reply_message(
-            event.reply_token,
-            TextSendMessage(text='我秀逗了，不好意思，請再說一次！')
-        )
         requests.post(line_notify_api, headers=header, data={'message': e})
-        return
-    except:
+        assistant_reply = '我秀逗了，不好意思，請再說一次！'
+    except BaseException as e:
+        requests.post(line_notify_api, headers=header, data={'message': e})
+        assistant_reply = '我當機了，不好意思，請再說一次！'
+    else:
+        assistant_reply = response['choices'][0]['message']['content'].strip()
+        balance = int(gas('charge', event.source.user_id)) if not playground_mode else 1001000
+        assistant_reply += '\n\n' + ['3Q了，後會有期掰👋', '今天我只能再回答你最後☝️題！', '今天我還能回答你✌️題！'][balance] if balance < 3 else ''
+    finally:
+        prompt.append({"role": "assistant", "content": assistant_reply})
+        prompts[event_id] = prompt[-11:]
+        god_mode(Q=event.message.text, A=assistant_reply)
         line_bot_api.reply_message(
             event.reply_token,
-            ImageSendMessage(
-                'https://phoneky.co.uk/thumbs/screensavers/down/abstract/systemcras_ncl37enz.gif',
-                'https://phoneky.co.uk/thumbs/screensavers/down/abstract/systemcras_ncl37enz.gif')
+            TextSendMessage(text=assistant_reply)
         )
-        return
-    assistant_reply = response['choices'][0]['message']['content'].strip()
-    balance = int(gas('charge', event.source.user_id)) if not playground_mode else 1001000
-    reminder = '\n\n' + ['3Q了，後會有期掰👋', '今天我只能再回答你最後☝️題！', '今天我還能回答你✌️題！'][balance] if balance < 3 else ''
-    line_bot_api.reply_message(
-        event.reply_token,
-        TextSendMessage(text=assistant_reply + reminder)
-    )
-    prompt.append({"role": "assistant", "content": assistant_reply})
-    prompts[event_id] = prompt[-13:]
-    god_mode(Q=event.message.text, A=assistant_reply)
 @handler.add(MessageEvent, message=StickerMessage)
 def handle_sticker_message(event):
     line_bot_api.reply_message(
