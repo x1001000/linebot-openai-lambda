@@ -48,7 +48,7 @@ def handle_text_message(event):
             messages=preprompt + prompt)
     except openai.error.RateLimitError as e:
         if 'You exceeded your current quota' in str(e):
-            openai.api_key = OPENAI_API_KEY('new')
+            openai.api_key, model = OPENAI_API_KEY('new')
         requests.post(line_notify_api, headers=header, data={'message': e})
         assistant_reply = '牛仔很忙，不好意思，請稍後再賴！🤘🤠'
     except openai.error.InvalidRequestError as e:
@@ -57,7 +57,7 @@ def handle_text_message(event):
         requests.post(line_notify_api, headers=header, data={'message': e})
         assistant_reply = '我太難了，不好意思，請再說一次！'
     except openai.error.AuthenticationError as e:
-        openai.api_key = OPENAI_API_KEY('new')
+        openai.api_key, model = OPENAI_API_KEY('new')
         requests.post(line_notify_api, headers=header, data={'message': e})
         assistant_reply = '我秀逗了，不好意思，請再說一次！'
     except BaseException as e:
