@@ -81,6 +81,14 @@ def handle_sticker_message(event):
         event.reply_token,
         TextSendMessage(text='$', emojis=[{'index': 0, 'productId': '5ac21c46040ab15980c9b442', 'emojiId': '138'}])
     )
+@handler.add(MessageEvent, message=AudioMessage)
+def handle_audio_message(event):
+    message_content = line_bot_api.get_message_content(event.message.id)
+    with open(f'/tmp/{event.message.id}.m4a', 'wb') as fd:
+        for chunk in message_content.iter_content():
+            fd.write(chunk)
+    event.message.text = openai.Audio.transcribe('whisper-1', open(f'/tmp/{event.message.id}.m4a', 'rb')).text
+    handle_text_message(event)
 
 
 import openai
