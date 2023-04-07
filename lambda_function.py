@@ -80,7 +80,7 @@ def handle_text_message(event):
             line_bot_api.reply_message(
                 event.reply_token,
                 AudioSendMessage(
-                    original_content_url=gTTS_s3_url(event, assistant_reply, 'zh-TW'),
+                    original_content_url=gTTS_s3_url(assistant_reply, event.message.id),
                     duration=60000)
             )
 @handler.add(MessageEvent, message=StickerMessage)
