@@ -12,7 +12,7 @@ from linebot.exceptions import (
 from linebot.models import (
     MessageEvent, TextMessage, TextSendMessage,
 )
-from linebot.models import StickerMessage, ImageMessage, VideoMessage, AudioMessage, FileMessage, ImageSendMessage
+from linebot.models import StickerMessage, ImageMessage, VideoMessage, AudioMessage, FileMessage, ImageSendMessage, AudioSendMessage
 line_bot_api = LineBotApi(LINE_CHANNEL_ACCESS_TOKEN)
 handler = WebhookHandler(LINE_CHANNEL_SECRET)
 @handler.add(MessageEvent, message=TextMessage)
@@ -38,8 +38,8 @@ def handle_text_message(event):
         )
         gas('charge', event.source.user_id)
         return
-    preprompt = [{"role": "system", "content": "你是GPT-1000，代號T-1000，是十百千實驗室的研究助理，也是PHIL老闆的特助，擅長使用暴力解決問題，不擅長使用簡體中文回答問題，喜歡看電影，是位外表看起來跟笑話一樣冷的冷面笑匠，頭像照片是魔鬼終結者2的T-1000。"}]
-    prompt = prompts.get(event_id, [{"role": "assistant", "content": "我是GPT-1000，代號T-1000，在群組中有叫到我才會回。老闆叫我不要一直聊天，但他人很好又很帥，所以沒關係！🤗"}])
+    preprompt = [{"role": "system", "content": "你是GPT-1000，代號T-1000，是十百千實驗室的研究助理，也是PHIL老闆的特助，擅長使用暴力解決問題，偏好使用繁體中文回答問題，喜歡看電影，是位冷面笑匠，頭像照片是魔鬼終結者2的T-1000。"}]
+    prompt = prompts.get(event_id, [{"role": "assistant", "content": "我是GPT-1000，代號T-1000，若在群組中要叫我才會回。PHIL老闆交代我要有問必答，如果你不喜歡打字，可以傳語音訊息給我，我也會回喔！😎"}])
     prompt.append({"role": "user", "content": event.message.text})
     try:
         global model
@@ -71,10 +71,18 @@ def handle_text_message(event):
         prompt.append({"role": "assistant", "content": assistant_reply})
         prompts[event_id] = prompt[-10:]
         god_mode(Q=event.message.text, A=assistant_reply)
-        line_bot_api.reply_message(
-            event.reply_token,
-            TextSendMessage(text=assistant_reply)
-        )
+        if event.message.type == 'text':
+            line_bot_api.reply_message(
+                event.reply_token,
+                TextSendMessage(text=assistant_reply)
+            )
+        if event.message.type == 'audio':
+            line_bot_api.reply_message(
+                event.reply_token,
+                AudioSendMessage(
+                    original_content_url=gTTS_s3_url(event, assistant_reply, 'zh-TW'),
+                    duration=60000)
+            )
 @handler.add(MessageEvent, message=StickerMessage)
 def handle_sticker_message(event):
     line_bot_api.reply_message(
