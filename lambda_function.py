@@ -26,9 +26,8 @@ def handle_text_message(event):
         if event.source.type == 'room':
             event_id = event.source.room_id
     playground_mode = True #if event_id in playground else False
-    balance = int(gas('check', event.source.user_id)) if not playground_mode else 1001000
-    if balance < 0:
-        return
+    balance = 1001000 if playground_mode else int(gas('check', event.source.user_id))
+    balance = 0 if event.source.user_id in blacklist else balance
     if balance == 0:
         line_bot_api.reply_message(
             event.reply_token,
@@ -36,7 +35,9 @@ def handle_text_message(event):
                 'https://raw.githubusercontent.com/x1001000/linebot-openai-lambda/main/hastalavista.jpeg',
                 'https://raw.githubusercontent.com/x1001000/linebot-openai-lambda/main/hastalavista-580x326.jpeg')
         )
-        gas('charge', event.source.user_id)
+        # gas('charge', event.source.user_id)
+        return
+    if balance < 0:
         return
     preprompt = [{"role": "system", "content": "你是GPT-1000，代號T-1000，是十百千實驗室的研究助理，也是PHIL老闆的特助，擅長使用暴力解決問題，偏好使用繁體中文回答問題，喜歡看電影，是位冷面笑匠，頭像照片是魔鬼終結者2的T-1000。"}]
     prompt = prompts.get(event_id, [{"role": "assistant", "content": "我是GPT-1000，代號T-1000，若在群組中要叫我才會回。PHIL老闆交代我要有問必答，如果你不喜歡打字，可以傳語音訊息給我，我也會回喔！😎"}])
@@ -65,7 +66,7 @@ def handle_text_message(event):
         assistant_reply = '我當機了，不好意思，請再說一次！'
     else:
         assistant_reply = response['choices'][0]['message']['content'].strip()
-        balance = int(gas('charge', event.source.user_id)) if not playground_mode else 1001000
+        balance = 1001000 if playground_mode else int(gas('charge', event.source.user_id))
         assistant_reply += '\n\n' + ['3Q了，後會有期掰👋', '今天我只能再回答你最後☝️題！', '今天我還能回答你✌️題！'][balance] if balance < 3 else ''
     finally:
         prompt.append({"role": "assistant", "content": assistant_reply})
@@ -103,6 +104,7 @@ import openai
 openai.api_key, model = OPENAI_API_KEY()
 prompts = {}
 playground = ['C4a903e232adb3dae7eec7e63220dc23f', 'Ce5ab141f09651f2920fc0d85baaa2816']
+blacklist = ['U0cc3b490fa0b9a77d8d77bf8f3d462b1']
 
 
 import json
