@@ -50,19 +50,19 @@ def handle_text_message(event):
     except openai.error.RateLimitError as e:
         if 'You exceeded your current quota' in str(e):
             openai.api_key, model = OPENAI_API_KEY('new')
-        requests.post(line_notify_api, headers=header, data={'message': e})
+        requests.post(line_notify_api, headers=header, data={'message': f'{e.__class__.__name__}: {e}'})
         assistant_reply = '牛仔很忙，不好意思，請稍後再賴！🤘🤠'
     except openai.error.InvalidRequestError as e:
         if 'The model: `gpt-4` does not exist' in str(e):
             model = 'gpt-3.5-turbo'
-        requests.post(line_notify_api, headers=header, data={'message': e})
+        requests.post(line_notify_api, headers=header, data={'message': f'{e.__class__.__name__}: {e}'})
         assistant_reply = '我太難了，不好意思，請再說一次！'
     except openai.error.AuthenticationError as e:
         openai.api_key, model = OPENAI_API_KEY('new')
-        requests.post(line_notify_api, headers=header, data={'message': e})
+        requests.post(line_notify_api, headers=header, data={'message': f'{e.__class__.__name__}: {e}'})
         assistant_reply = '我秀逗了，不好意思，請再說一次！'
-    except BaseException as e:
-        requests.post(line_notify_api, headers=header, data={'message': e})
+    except Exception as e:
+        requests.post(line_notify_api, headers=header, data={'message': f'{e.__class__.__name__}: {e}'})
         assistant_reply = '我當機了，不好意思，請再說一次！'
     else:
         assistant_reply = response['choices'][0]['message']['content'].strip()
@@ -104,7 +104,7 @@ import openai
 openai.api_key, model = OPENAI_API_KEY()
 prompts = {}
 playground = ['C4a903e232adb3dae7eec7e63220dc23f', 'Ce5ab141f09651f2920fc0d85baaa2816']
-blacklist = ['U0cc3b490fa0b9a77d8d77bf8f3d462b1']
+blacklist = ['U0cc3b490fa0b9a77d8d77bf8f3d462b1', 'U03d11a62dd78617318f1a4597bda0f6b']
 
 
 import json
