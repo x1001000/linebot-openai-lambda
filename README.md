@@ -8,3 +8,4 @@
 1. Create function URL
 0. ~~[Visit API Gateway](https://console.aws.amazon.com/apigateway)~~
 0. ~~Create API for webhook events sent by LINE~~
+1. Edit Timeout
