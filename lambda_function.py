@@ -84,14 +84,14 @@ def handle_audio_message(event):
         transcript = client.audio.transcriptions.create(
             model='whisper-1',
             file=open(f'/tmp/{event.message.id}.m4a', 'rb'),
-            response_format='text')
+            response_format='text').strip()
         reply_text = assistant_reply(event, transcript)
         line_bot_api = MessagingApi(api_client)
         line_bot_api.reply_message(
             ReplyMessageRequest(
                 reply_token=event.reply_token,
                 messages=[TextMessage(text=reply_text), AudioMessage(
-                    original_content_url=gTTS_s3_url(reply_text, event.message.id),
+                    original_content_url=TTS_s3_url(reply_text, event.message.id),
                     duration=60000)]
             )
         )
@@ -168,19 +168,20 @@ def lambda_handler(event, context):
     }
 
 
-from gtts import gTTS
+# from gtts import gTTS
 import boto3
-def gTTS_s3_url(text, message_id):
+def TTS_s3_url(text, message_id):
     file_name = f'/tmp/{message_id}.mp3'
     object_name = f'GPT-1000/{message_id}.mp3'
     bucket_name = 'x1001000-public'
-    lang = client.chat.completions.create(
-        model="gpt-3.5-turbo",
-        messages=[{"role": "user", "content": f'Return the 2-letter language code for "{text}". ONLY the code and nothing else.'}]
-        ).choices[0].message.content
-    requests.post(notify_api, headers=header, data={'message': lang})
-    if lang == 'zh':
-        lang = 'zh-TW'
-    gTTS(text=text, lang=lang).save(file_name)
+    # lang = client.chat.completions.create(
+    #     model="gpt-3.5-turbo",
+    #     messages=[{"role": "user", "content": f'Return the 2-letter language code for "{text}". ONLY the code and nothing else.'}]
+    #     ).choices[0].message.content
+    # requests.post(notify_api, headers=header, data={'message': lang})
+    # if lang == 'zh':
+    #     lang = 'zh-TW'
+    # gTTS(text=text, lang=lang).save(file_name)
+    client.audio.speech.create(model='tts-1', voice='alloy', input=text).stream_to_file(file_name)
     boto3.client('s3').upload_file(file_name, bucket_name, object_name)
     return f'https://{bucket_name}.s3.ap-northeast-1.amazonaws.com/{object_name}'
