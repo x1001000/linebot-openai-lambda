@@ -34,7 +34,8 @@ from linebot.v3.webhooks import (
     MessageEvent,
     TextMessageContent,
     StickerMessageContent,
-    AudioMessageContent
+    AudioMessageContent,
+    ImageMessageContent
 )
 from linebot.v3.messaging import (
     Configuration,
@@ -43,8 +44,8 @@ from linebot.v3.messaging import (
     MessagingApiBlob,
     ReplyMessageRequest,
     TextMessage,
-    ImageMessage,
-    AudioMessage
+    AudioMessage,
+    ImageMessage
 )
 configuration = Configuration(access_token=channel_access_token)
 handler = WebhookHandler(channel_secret)
@@ -84,7 +85,8 @@ def handle_audio_message(event):
         transcript = client.audio.transcriptions.create(
             model='whisper-1',
             file=open(f'/tmp/{event.message.id}.m4a', 'rb'),
-            response_format='text').strip()
+            response_format='text'
+            ).strip()
         reply_text = assistant_reply(event, transcript)
         line_bot_api = MessagingApi(api_client)
         line_bot_api.reply_message(
@@ -95,6 +97,15 @@ def handle_audio_message(event):
                     duration=60000)]
             )
         )
+@handler.add(MessageEvent, message=ImageMessageContent)
+def handle_image_message(event):
+    with ApiClient(configuration) as api_client:
+        line_bot_blob_api = MessagingApiBlob(api_client)
+        message_content = line_bot_blob_api.get_message_content(message_id=event.message.id)
+        with open(f'/tmp/{event.message.id}.jpg', 'wb') as tf:
+            tf.write(message_content)
+        global image_just_sent
+        image_just_sent = f'/tmp/{event.message.id}.jpg'
 
 with open('blacklist.txt') as f:
     blacklist = [line.strip() for line in f]
@@ -127,7 +138,9 @@ def assistant_reply(event, user_text):
     try:
         completion = client.chat.completions.create(
             model="gpt-3.5-turbo",
-            messages=instruction + conversation)
+            messages=instruction + conversation,
+            tools=tools
+            )
     except openai.error.RateLimitError as e:
         # if 'You exceeded your current quota' in str(e):
         #     openai.api_key, model = OPENAI_API_KEY('new')
@@ -147,6 +160,32 @@ def assistant_reply(event, user_text):
         assistant_reply = '我當機了，請再說一次！'
     else:
         assistant_reply = completion.choices[0].message.content
+        global image_just_sent
+        if completion.choices[0].message.tool_calls:
+            requests.post(notify_api, headers=header, data={'message': 'CALL-OUT'})
+            if image_just_sent:
+                requests.post(notify_api, headers=header, data={'message': 'GPT-4V'})
+                model = 'gpt-4-vision-preview'
+                user_content = [
+                    {
+                        'type': 'text',
+                        'text': user_text
+                    },
+                    {
+                        'type': 'image_url',
+                        'image_url': {'url': ImageMessageContent_s3_url(image_just_sent)}
+                    }
+                ]
+            else:
+                model = 'gpt-3.5-turbo'
+                user_content = user_text
+            assistant_reply = client.chat.completions.create(
+                model=model,
+                messages=instruction + [{"role": "user", "content": user_content}],
+                max_tokens=1000
+                ).choices[0].message.content
+        else:
+            image_just_sent = None
     finally:
         conversation.append({"role": "assistant", "content": assistant_reply})
         chats[event_id] = conversation[-4:]
@@ -185,3 +224,20 @@ def TTS_s3_url(text, message_id):
     client.audio.speech.create(model='tts-1', voice='alloy', input=text).stream_to_file(file_name)
     boto3.client('s3').upload_file(file_name, bucket_name, object_name)
     return f'https://{bucket_name}.s3.ap-northeast-1.amazonaws.com/{object_name}'
+def ImageMessageContent_s3_url(image_just_sent):
+    file_name = image_just_sent
+    object_name = f'GPT-1000/{image_just_sent[5:]}'
+    bucket_name = 'x1001000-public'
+    boto3.client('s3').upload_file(file_name, bucket_name, object_name)
+    return f'https://{bucket_name}.s3.ap-northeast-1.amazonaws.com/{object_name}'
+
+tools = [
+  {
+    "type": "function",
+    "function": {
+      "name": "get_vision_understanding",
+      "parameters": {"type": "object", "properties": {}}
+    }
+  }
+]
+image_just_sent = None
