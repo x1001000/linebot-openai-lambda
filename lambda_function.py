@@ -81,8 +81,11 @@ def handle_audio_message(event):
         message_content = line_bot_blob_api.get_message_content(message_id=event.message.id)
         with open(f'/tmp/{event.message.id}.m4a', 'wb') as tf:
             tf.write(message_content)
-        transcription_text = openai.Audio.transcribe('whisper-1', open(f'/tmp/{event.message.id}.m4a', 'rb')).text
-        reply_text = assistant_reply(event, transcription_text)
+        transcript = client.audio.transcriptions.create(
+            model='whisper-1',
+            file=open(f'/tmp/{event.message.id}.m4a', 'rb'),
+            response_format='text')
+        reply_text = assistant_reply(event, transcript)
         line_bot_api = MessagingApi(api_client)
         line_bot_api.reply_message(
             ReplyMessageRequest(
@@ -108,8 +111,8 @@ def terminator(event):
         )
 
 
-import openai
-openai.api_key = os.getenv("OPENAI_API_KEY")
+from openai import OpenAI
+client = OpenAI()
 chats = {}
 def assistant_reply(event, user_text):
     if event.source.type == 'user':
@@ -122,7 +125,7 @@ def assistant_reply(event, user_text):
     conversation = chats.get(event_id, [{"role": "assistant", "content": "我是GPT-1000，代號T1000，若在群組中要叫我我才會回。PHIL老闆交代我要有問必答，如果你不喜歡打字，可以傳語音訊息給我，我也會回喔！😎"}])
     conversation.append({"role": "user", "content": user_text})
     try:
-        response = openai.ChatCompletion.create(
+        completion = client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=instruction + conversation)
     except openai.error.RateLimitError as e:
@@ -143,7 +146,7 @@ def assistant_reply(event, user_text):
         requests.post(notify_api, headers=header, data={'message': f'{e.__class__.__name__}: {e}'})
         assistant_reply = '我當機了，請再說一次！'
     else:
-        assistant_reply = response.choices[0].message.content
+        assistant_reply = completion.choices[0].message.content
     finally:
         conversation.append({"role": "assistant", "content": assistant_reply})
         chats[event_id] = conversation[-4:]
@@ -171,7 +174,7 @@ def gTTS_s3_url(text, message_id):
     file_name = f'/tmp/{message_id}.mp3'
     object_name = f'GPT-1000/{message_id}.mp3'
     bucket_name = 'x1001000-public'
-    lang = openai.ChatCompletion.create(
+    lang = client.chat.completions.create(
         model="gpt-3.5-turbo",
         messages=[{"role": "user", "content": f'Return the 2-letter language code for "{text}". ONLY the code and nothing else.'}]
         ).choices[0].message.content
