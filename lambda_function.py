@@ -104,8 +104,14 @@ def handle_image_message(event):
         message_content = line_bot_blob_api.get_message_content(message_id=event.message.id)
         with open(f'/tmp/{event.message.id}.jpg', 'wb') as tf:
             tf.write(message_content)
-        global image_just_sent
-        image_just_sent = f'/tmp/{event.message.id}.jpg'
+    if event.source.type == 'user':
+        source_id = event.source.user_id
+    elif event.source.type == 'group':
+        source_id = event.source.group_id
+    elif event.source.type == 'room':
+        source_id = event.source.room_id
+    threads[source_id] = threads.get(source_id, {})
+    threads[source_id]['image_just_sent'] = f'/tmp/{event.message.id}.jpg'
 
 with open('blacklist.txt') as f:
     blacklist = [line.strip() for line in f]
@@ -124,16 +130,18 @@ def terminator(event):
 
 from openai import OpenAI
 client = OpenAI()
-chats = {}
+instruction = [{"role": "system", "content": "你是GPT-1000，代號T1000，是十百千實驗室的研究助理，也是PHIL老闆的特助，擅長使用暴力解決問題，偏好使用繁體中文回答問題，喜歡看電影，是位冷面笑匠，頭像照片是魔鬼終結者2的T-1000。"}]
+threads = {}
 def assistant_reply(event, user_text):
     if event.source.type == 'user':
-        event_id = event.source.user_id
+        source_id = event.source.user_id
     elif event.source.type == 'group':
-        event_id = event.source.group_id
+        source_id = event.source.group_id
     elif event.source.type == 'room':
-        event_id = event.source.room_id
-    instruction = [{"role": "system", "content": "你是GPT-1000，代號T1000，是十百千實驗室的研究助理，也是PHIL老闆的特助，擅長使用暴力解決問題，偏好使用繁體中文回答問題，喜歡看電影，是位冷面笑匠，頭像照片是魔鬼終結者2的T-1000。"}]
-    conversation = chats.get(event_id, [{"role": "assistant", "content": "我是GPT-1000，代號T1000，若在群組中要叫我我才會回。PHIL老闆交代我要有問必答，如果你不喜歡打字，可以傳語音訊息給我，我也會回喔！😎"}])
+        source_id = event.source.room_id
+    thread = threads.get(source_id, {})
+    image_just_sent = thread.get('image_just_sent')
+    conversation = thread.get('conversation', [{"role": "assistant", "content": "我是GPT-1000，代號T1000，若在群組中要叫我我才會回。PHIL老闆交代我要有問必答，如果你不喜歡打字，可以傳語音訊息給我，我也會回喔！😎"}])
     conversation.append({"role": "user", "content": user_text})
     try:
         completion = client.chat.completions.create(
@@ -160,7 +168,6 @@ def assistant_reply(event, user_text):
         assistant_reply = '我當機了，請再說一次！'
     else:
         assistant_reply = completion.choices[0].message.content
-        global image_just_sent
         if completion.choices[0].message.tool_calls:
             requests.post(notify_api, headers=header, data={'message': 'CALL-OUT'})
             if image_just_sent:
@@ -185,10 +192,11 @@ def assistant_reply(event, user_text):
                 max_tokens=1000
                 ).choices[0].message.content
         else:
-            image_just_sent = None
+            thread['image_just_sent'] = None
     finally:
         conversation.append({"role": "assistant", "content": assistant_reply})
-        chats[event_id] = conversation[-4:]
+        thread['conversation'] = conversation[-4:]
+        threads['source_id'] = thread
         god_mode(Q=user_text, A=assistant_reply)
         return assistant_reply
 
@@ -240,4 +248,3 @@ tools = [
     }
   }
 ]
-image_just_sent = None
