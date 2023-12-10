@@ -128,8 +128,10 @@ def terminator(event):
         )
 
 
+import openai
 from openai import OpenAI
 client = OpenAI()
+
 instruction = [{"role": "system", "content": "你是GPT-1000，代號T1000，是十百千實驗室的研究助理，也是PHIL老闆的特助，擅長使用暴力解決問題，偏好使用繁體中文回答問題，喜歡看電影，是位冷面笑匠，頭像照片是魔鬼終結者2的T-1000。"}]
 threads = {}
 def assistant_reply(event, user_text):
@@ -149,22 +151,22 @@ def assistant_reply(event, user_text):
             messages=instruction + conversation,
             tools=tools
             )
-    except openai.error.RateLimitError as e:
+    except openai.RateLimitError as e:
         # if 'You exceeded your current quota' in str(e):
         #     openai.api_key, model = OPENAI_API_KEY('new')
-        requests.post(notify_api, headers=header, data={'message': f'{e.__class__.__name__}: {e}'})
+        requests.post(notify_api, headers=header, data={'message': f"{e.__class__.__name__}: {eval(e.message.split('-')[1])['error']['message']}"})
         assistant_reply = '牛仔很忙，請稍後再賴！🤘🤠'
-    except openai.error.InvalidRequestError as e:
+    except openai.InvalidRequestError as e:
         # if 'The model: `gpt-4` does not exist' in str(e):
         #     model = 'gpt-3.5-turbo'
-        requests.post(notify_api, headers=header, data={'message': f'{e.__class__.__name__}: {e}'})
+        requests.post(notify_api, headers=header, data={'message': f"{e.__class__.__name__}: {eval(e.message.split('-')[1])['error']['message']}"})
         assistant_reply = '我太難了，請再說一次！'
-    except openai.error.AuthenticationError as e:
+    except openai.AuthenticationError as e:
         # openai.api_key, model = OPENAI_API_KEY('new')
-        requests.post(notify_api, headers=header, data={'message': f'{e.__class__.__name__}: {e}'})
+        requests.post(notify_api, headers=header, data={'message': f"{e.__class__.__name__}: {eval(e.message.split('-')[1])['error']['message']}"})
         assistant_reply = '我秀逗了，請再說一次！'
     except Exception as e:
-        requests.post(notify_api, headers=header, data={'message': f'{e.__class__.__name__}: {e}'})
+        requests.post(notify_api, headers=header, data={'message': f"{e.__class__.__name__}: {eval(e.message.split('-')[1])['error']['message']}"})
         assistant_reply = '我當機了，請再說一次！'
     else:
         assistant_reply = completion.choices[0].message.content
@@ -186,11 +188,15 @@ def assistant_reply(event, user_text):
             else:
                 model = 'gpt-3.5-turbo'
                 user_content = user_text
-            assistant_reply = client.chat.completions.create(
-                model=model,
-                messages=instruction + [{"role": "user", "content": user_content}],
-                max_tokens=1000
-                ).choices[0].message.content
+            try:
+                assistant_reply = client.chat.completions.create(
+                    model=model,
+                    messages=instruction + [{"role": "user", "content": user_content}],
+                    max_tokens=1000
+                    ).choices[0].message.content
+            except openai.BadRequestError as e:
+                requests.post(notify_api, headers=header, data={'message': f"{e.__class__.__name__}: {eval(e.message.split('-')[1])['error']['message']}"})
+                assistant_reply = '不可以壞壞🙅'
         else:
             thread['image_just_sent'] = None
     finally:
