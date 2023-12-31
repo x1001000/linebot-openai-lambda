@@ -52,7 +52,7 @@ handler = WebhookHandler(channel_secret)
 @handler.add(MessageEvent, message=TextMessageContent)
 def handle_text_message(event):
     if event.source.user_id in blacklist:
-        terminator(event)
+        # terminator(event)
         return
     if event.source.type != 'user':
         if not re.search('[Tt]-?1000', event.message.text):
