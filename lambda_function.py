@@ -156,33 +156,11 @@ def assistant_reply(event, user_text):
         assistant_reply = ''
     else:
         assistant_reply = completion.choices[0].message.content
-        if completion.choices[0].message.tool_calls:
-            requests.post(notify_api, headers=header, data={'message': 'CALL-OUT'})
-            if image_just_sent:
-                requests.post(notify_api, headers=header, data={'message': 'GPT-4V'})
-                model = 'gpt-4-vision-preview'
-                user_content = [
-                    {
-                        'type': 'text',
-                        'text': user_text
-                    },
-                    {
-                        'type': 'image_url',
-                        'image_url': {'url': ImageMessageContent_s3_url(image_just_sent)}
-                    }
-                ]
-            else:
-                model = 'gpt-3.5-turbo-16k'
-                user_content = user_text
-            try:
-                assistant_reply = client.chat.completions.create(
-                    model=model,
-                    messages=instruction + [{"role": "user", "content": user_content}],
-                    max_tokens=1000
-                    ).choices[0].message.content
-            except openai.BadRequestError as e:
-                requests.post(notify_api, headers=header, data={'message': e})
-                assistant_reply = '不可以壞壞🙅'
+        tool_calls = completion.choices[0].message.tool_calls
+        if tool_calls:
+            for tool_call in tool_calls:
+                requests.post(notify_api, headers=header, data={'message': 'CALL-OUT'})
+                assistant_reply = eval(tool_call.function.name)(image_just_sent, user_text)
         else:
             thread['image_just_sent'] = None
     finally:
@@ -232,11 +210,25 @@ def ImageMessageContent_s3_url(image_just_sent):
     return f'https://{bucket_name}.s3.ap-northeast-1.amazonaws.com/{object_name}'
 
 tools = [
-  {
-    "type": "function",
-    "function": {
-      "name": "get_vision_understanding",
-      "parameters": {"type": "object", "properties": {}}
-    }
-  }
-]
+    {'type': 'function', 'function': {'name': 'get_vision_understanding'}},
+    {'type': 'function', 'function': {'name': 'generate_image_from_text'}},
+    {'type': 'function', 'function': {'name': 'generate_image_from_image'}},
+    ]
+def get_vision_understanding(image_just_sent, user_text):
+    if image_just_sent:
+        requests.post(notify_api, headers=header, data={'message': 'GPT-4V'})
+        content_parts = []
+        content_parts.append({'type': 'text', 'text': user_text})
+        content_parts.append({'type': 'image_url', 'image_url': {'url': ImageMessageContent_s3_url(image_just_sent)}})
+        try:
+            assistant_reply = client.chat.completions.create(
+                model='gpt-4-vision-preview',
+                messages=instruction + [{"role": "user", "content": content_parts}],
+                max_tokens=1000
+                ).choices[0].message.content
+        except openai.BadRequestError as e:
+            requests.post(notify_api, headers=header, data={'message': e})
+            assistant_reply = '不可以壞壞🙅'
+    else:
+        assistant_reply = '請先傳圖再提問喔👀'
+    return assistant_reply
