@@ -151,23 +151,9 @@ def assistant_reply(event, user_text):
             messages=instruction + conversation,
             tools=tools
             )
-    except openai.RateLimitError as e:
-        # if 'You exceeded your current quota' in str(e):
-        #     openai.api_key, model = OPENAI_API_KEY('new')
-        requests.post(notify_api, headers=header, data={'message': f"{e.__class__.__name__}: {eval(e.message.split('-')[1])['error']['message']}"})
-        assistant_reply = '牛仔很忙，請稍後再賴！🤘🤠'
-    except openai.InvalidRequestError as e:
-        # if 'The model: `gpt-4` does not exist' in str(e):
-        #     model = 'gpt-3.5-turbo-16k'
-        requests.post(notify_api, headers=header, data={'message': f"{e.__class__.__name__}: {eval(e.message.split('-')[1])['error']['message']}"})
-        assistant_reply = '我太難了，請再說一次！'
-    except openai.AuthenticationError as e:
-        # openai.api_key, model = OPENAI_API_KEY('new')
-        requests.post(notify_api, headers=header, data={'message': f"{e.__class__.__name__}: {eval(e.message.split('-')[1])['error']['message']}"})
-        assistant_reply = '我秀逗了，請再說一次！'
     except Exception as e:
-        requests.post(notify_api, headers=header, data={'message': f"{e.__class__.__name__}: {eval(e.message.split('-')[1])['error']['message']}"})
-        assistant_reply = '我當機了，請再說一次！'
+        requests.post(notify_api, headers=header, data={'message': e})
+        assistant_reply = ''
     else:
         assistant_reply = completion.choices[0].message.content
         if completion.choices[0].message.tool_calls:
@@ -195,7 +181,7 @@ def assistant_reply(event, user_text):
                     max_tokens=1000
                     ).choices[0].message.content
             except openai.BadRequestError as e:
-                requests.post(notify_api, headers=header, data={'message': f"{e.__class__.__name__}: {eval(e.message.split('-')[1])['error']['message']}"})
+                requests.post(notify_api, headers=header, data={'message': e})
                 assistant_reply = '不可以壞壞🙅'
         else:
             thread['image_just_sent'] = None
