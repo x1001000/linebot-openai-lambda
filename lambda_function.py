@@ -221,10 +221,10 @@ def get_vision_understanding(event, thread):
     user_text = thread['conversation'][-1]['content']
     image_just_sent = thread.get('image_just_sent')
     if image_just_sent:
-        requests.post(notify_api, headers=header, data={'message': 'GPT-4V'})
         content_parts = []
         content_parts.append({'type': 'text', 'text': user_text})
         content_parts.append({'type': 'image_url', 'image_url': {'url': ImageMessageContent_s3_url(image_just_sent)}})
+        requests.post(notify_api, headers=header, data={'message': 'GPT-4V'})
         try:
             assistant_reply = client.chat.completions.create(
                 model='gpt-4-vision-preview',
@@ -262,6 +262,7 @@ def generate_image_from_text(event, thread):
                             preview_image_url=image_url)]
                 )
             )
+        return ''
     except openai.OpenAIError as e:
         requests.post(notify_api, headers=header, data={'message': e})
-    return ''
+        return '蛤？'
