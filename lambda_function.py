@@ -92,9 +92,11 @@ def handle_audio_message(event):
         line_bot_api.reply_message(
             ReplyMessageRequest(
                 reply_token=event.reply_token,
-                messages=[TextMessage(text=reply_text), AudioMessage(
-                    original_content_url=TTS_s3_url(reply_text, event.message.id),
-                    duration=60000)]
+                messages=[
+                    TextMessage(text=reply_text),
+                    AudioMessage(
+                        original_content_url=TTS_s3_url(reply_text, event.message.id),
+                        duration=60000)]
             )
         )
 @handler.add(MessageEvent, message=ImageMessageContent)
@@ -142,7 +144,6 @@ def assistant_reply(event, user_text):
     elif event.source.type == 'room':
         source_id = event.source.room_id
     thread = threads[source_id] = threads.get(source_id, {}) # thread is threads[source_id] as long as both not to reassign
-    image_just_sent = thread.get('image_just_sent')
     conversation = thread.get('conversation', [{"role": "assistant", "content": "我是GPT-1000，代號T1000，若在群組中要叫我我才會回。PHIL老闆交代我要有問必答，如果你不喜歡打字，可以傳語音訊息給我，我也會回喔！😎"}])
     conversation.append({"role": "user", "content": user_text})
     try:
@@ -160,7 +161,7 @@ def assistant_reply(event, user_text):
         if tool_calls:
             for tool_call in tool_calls:
                 requests.post(notify_api, headers=header, data={'message': 'CALL-OUT'})
-                assistant_reply = eval(tool_call.function.name)(image_just_sent, user_text)
+                assistant_reply = eval(tool_call.function.name)(event, thread)
         else:
             thread['image_just_sent'] = None
     finally:
@@ -213,7 +214,9 @@ tools = [
     {'type': 'function', 'function': {'name': 'generate_image_from_text'}},
     {'type': 'function', 'function': {'name': 'generate_image_from_image'}},
     ]
-def get_vision_understanding(image_just_sent, user_text):
+def get_vision_understanding(event, thread):
+    user_text = thread['conversation'][-1]['content']
+    image_just_sent = thread.get('image_just_sent')
     if image_just_sent:
         requests.post(notify_api, headers=header, data={'message': 'GPT-4V'})
         content_parts = []
@@ -231,3 +234,23 @@ def get_vision_understanding(image_just_sent, user_text):
     else:
         assistant_reply = '請先傳圖再提問喔👀'
     return assistant_reply
+def generate_image_from_text(event, thread):
+    user_text = thread['conversation'][-1]['content']
+    requests.post(notify_api, headers=header, data={'message': 'DALL·E 3'})
+    try:
+        image_url = client.images.generate(model='dall-e-3', prompt=user_text).data[0].url
+        with ApiClient(configuration) as api_client:
+            line_bot_api = MessagingApi(api_client)
+            line_bot_api.reply_message(
+                ReplyMessageRequest(
+                    reply_token=event.reply_token,
+                    messages=[
+                        TextMessage(text='噗噗～來了！'),
+                        ImageMessage(
+                            original_content_url=image_url,
+                            preview_image_url=image_url)]
+                )
+            )
+    except openai.OpenAIError as e:
+        requests.post(notify_api, headers=header, data={'message': e})
+    return ''
