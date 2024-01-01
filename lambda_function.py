@@ -143,8 +143,10 @@ def assistant_reply(event, user_text):
         source_id = event.source.group_id
     elif event.source.type == 'room':
         source_id = event.source.room_id
-    thread = threads[source_id] = threads.get(source_id, {}) # thread is threads[source_id] as long as both not to reassign
-    conversation = thread.get('conversation', [{"role": "assistant", "content": "我是GPT-1000，代號T1000，若在群組中要叫我我才會回。PHIL老闆交代我要有問必答，如果你不喜歡打字，可以傳語音訊息給我，我也會回喔！😎"}])
+#   thread is threads[source_id] as long as both not to be reassigned
+    thread = threads[source_id] = threads.get(source_id, {})
+#   conversation is thread['conversation'] until thread['conversation'] to be reassigned
+    conversation = thread['conversation'] = thread.get('conversation', [{"role": "assistant", "content": "我是GPT-1000，代號T1000，若在群組中要叫我我才會回。PHIL老闆交代我要有問必答，如果你不喜歡打字，可以傳語音訊息給我，我也會回喔！😎"}])
     conversation.append({"role": "user", "content": user_text})
     try:
         completion = client.chat.completions.create(
@@ -212,7 +214,6 @@ def ImageMessageContent_s3_url(image_just_sent):
 tools = [
     {'type': 'function', 'function': {'name': 'get_vision_understanding'}},
     {'type': 'function', 'function': {'name': 'generate_image_from_text'}},
-    {'type': 'function', 'function': {'name': 'generate_image_from_image'}},
     ]
 def get_vision_understanding(event, thread):
     user_text = thread['conversation'][-1]['content']
