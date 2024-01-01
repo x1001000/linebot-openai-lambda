@@ -141,7 +141,7 @@ def assistant_reply(event, user_text):
         source_id = event.source.group_id
     elif event.source.type == 'room':
         source_id = event.source.room_id
-    thread = threads.get(source_id, {})
+    thread = threads[source_id] = threads.get(source_id, {}) # thread is threads[source_id] as long as both not to reassign
     image_just_sent = thread.get('image_just_sent')
     conversation = thread.get('conversation', [{"role": "assistant", "content": "我是GPT-1000，代號T1000，若在群組中要叫我我才會回。PHIL老闆交代我要有問必答，如果你不喜歡打字，可以傳語音訊息給我，我也會回喔！😎"}])
     conversation.append({"role": "user", "content": user_text})
@@ -165,8 +165,7 @@ def assistant_reply(event, user_text):
             thread['image_just_sent'] = None
     finally:
         conversation.append({"role": "assistant", "content": assistant_reply})
-        thread['conversation'] = conversation[-6:]
-        threads[source_id] = thread
+        thread['conversation'] = conversation[-6:] # reassign
         god_mode(Q=user_text, A=assistant_reply)
         return assistant_reply
 
