@@ -115,6 +115,8 @@ def handle_image_message(event):
     threads[source_id] = threads.get(source_id, {})
     threads[source_id]['image_just_sent'] = f'/tmp/{event.message.id}.jpg'
 
+with open('whitelist.txt') as f:
+    whitelist = [line.strip() for line in f]
 with open('blacklist.txt') as f:
     blacklist = [line.strip() for line in f]
 def terminator(event):
@@ -236,6 +238,14 @@ def get_vision_understanding(event, thread):
         assistant_reply = '請先傳圖再提問喔👀'
     return assistant_reply
 def generate_image_from_text(event, thread):
+    if event.source.type == 'user':
+        source_id = event.source.user_id
+    elif event.source.type == 'group':
+        source_id = event.source.group_id
+    elif event.source.type == 'room':
+        source_id = event.source.room_id
+    if source_id not in whitelist:
+        return '我的圖片生成服務只提供PHIL老闆和他的家人朋友群組喔！如果你想請他喝咖啡，可以點我的頭像找到他👈'
     user_text = thread['conversation'][-1]['content']
     requests.post(notify_api, headers=header, data={'message': 'DALL·E 3'})
     try:
