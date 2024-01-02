@@ -148,7 +148,7 @@ def assistant_reply(event, user_text):
 #   thread is threads[source_id] as long as both not to be reassigned
     thread = threads[source_id] = threads.get(source_id, {})
 #   conversation is thread['conversation'] until thread['conversation'] to be reassigned
-    conversation = thread['conversation'] = thread.get('conversation', [{"role": "assistant", "content": "我是GPT-1000，代號T1000，若在群組中要叫我我才會回。PHIL老闆交代我要有問必答，如果你不喜歡打字，可以傳語音訊息給我，我也會回喔！😎"}])
+    conversation = thread['conversation'] = thread.get('conversation', [{"role": "assistant", "content": "我是GPT-1000，代號T1000，若在群組中要叫我我才會回。PHIL老闆交代我要有問必答，如果你不喜歡打字，也可以傳語音訊息給我，我也會回語音喔！😎"}])
     conversation.append({"role": "user", "content": user_text})
     try:
         completion = client.chat.completions.create(
@@ -215,7 +215,7 @@ def ImageMessageContent_s3_url(image_just_sent):
 
 tools = [
     {'type': 'function', 'function': {'name': 'get_vision_understanding'}},
-    {'type': 'function', 'function': {'name': 'generate_image_from_text'}},
+    {'type': 'function', 'function': {'name': 'generate_an_image'}},
     ]
 def get_vision_understanding(event, thread):
     user_text = thread['conversation'][-1]['content']
@@ -235,9 +235,9 @@ def get_vision_understanding(event, thread):
             requests.post(notify_api, headers=header, data={'message': e})
             assistant_reply = '不可以壞壞🙅'
     else:
-        assistant_reply = '請先傳圖再提問喔👀'
+        assistant_reply = '如果要我幫忙圖像理解，請先傳圖再提問喔👀'
     return assistant_reply
-def generate_image_from_text(event, thread):
+def generate_an_image(event, thread):
     if event.source.type == 'user':
         source_id = event.source.user_id
     elif event.source.type == 'group':
@@ -245,7 +245,7 @@ def generate_image_from_text(event, thread):
     elif event.source.type == 'room':
         source_id = event.source.room_id
     if source_id not in whitelist:
-        return '我的圖片生成服務只提供PHIL老闆和他的家人朋友群組喔！如果你想請他喝咖啡，可以點我的頭像找到他👈'
+        return '我的圖像生成服務只提供PHIL老闆和他的家人朋友群組喔！如果你想請他喝咖啡，可以點我的頭像找到他👈'
     user_text = thread['conversation'][-1]['content']
     requests.post(notify_api, headers=header, data={'message': 'DALL·E 3'})
     try:
