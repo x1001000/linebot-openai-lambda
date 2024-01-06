@@ -170,7 +170,7 @@ def assistant_reply(event, user_text):
             thread['image_just_sent'] = None
     finally:
         conversation.append({"role": "assistant", "content": assistant_reply})
-        thread['conversation'] = conversation[-6:] # reassign
+        thread['conversation'] = conversation[-2:] # reassign
         god_mode(Q=user_text, A=assistant_reply)
         return assistant_reply
 
