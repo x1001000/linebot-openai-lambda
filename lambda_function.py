@@ -116,7 +116,7 @@ def handle_image_message(event):
     threads[source_id]['image_just_sent'] = f'/tmp/{event.message.id}.jpg'
 
 with open('whitelist.txt') as f:
-    whitelist = [line.strip() for line in f]
+    whitelist = [line.split()[0] for line in f]
 with open('blacklist.txt') as f:
     blacklist = [line.strip() for line in f]
 def terminator(event):
