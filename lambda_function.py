@@ -77,6 +77,9 @@ def handle_sticker_message(event):
         )
 @handler.add(MessageEvent, message=AudioMessageContent)
 def handle_audio_message(event):
+    if event.source.user_id in blacklist:
+        # terminator(event)
+        return
     with ApiClient(configuration) as api_client:
         line_bot_blob_api = MessagingApiBlob(api_client)
         message_content = line_bot_blob_api.get_message_content(message_id=event.message.id)
