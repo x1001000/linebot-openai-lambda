@@ -155,7 +155,7 @@ def assistant_reply(event, user_text):
     conversation.append({"role": "user", "content": user_text})
     try:
         completion = client.chat.completions.create(
-            model="gpt-3.5-turbo-16k",
+            model="gpt-3.5-turbo",
             messages=instruction + conversation,
             tools=tools
             )
@@ -199,7 +199,7 @@ def TTS_s3_url(text, message_id):
     object_name = f'GPT-1000/{message_id}.mp3'
     bucket_name = 'x1001000-public'
     # lang = client.chat.completions.create(
-    #     model="gpt-3.5-turbo-16k",
+    #     model="gpt-3.5-turbo",
     #     messages=[{"role": "user", "content": f'Return the 2-letter language code for "{text}". ONLY the code and nothing else.'}]
     #     ).choices[0].message.content
     # requests.post(notify_api, headers=header, data={'message': lang})
