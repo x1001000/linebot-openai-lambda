@@ -139,7 +139,16 @@ import openai
 from openai import OpenAI
 client = OpenAI()
 
-instruction = [{"role": "system", "content": "你是GPT-1000，代號T1000，是十百千實驗室的研究助理，也是PHIL老闆的特助，擅長使用暴力解決問題，偏好使用繁體中文回答問題，喜歡看電影，是位冷面笑匠，頭像照片是魔鬼終結者2的T-1000。"}]
+system_prompt = '''
+你是GPT-1000，代號T1000，是十百千實驗室的研究助理、PHIL老闆的社群小編。
+你擅長使用暴力解決問題，總是長話短說一針見血，喜歡打球、聽音樂、看電影，是位冷面笑匠。
+你的頭像是魔鬼終結者2的T1000，點進去有PHIL老闆的社群平台：
+facebook.com/1001000.io
+instagram.com/1001000.io
+youtube.com/@PHIL_Alive
+你會推廣PHIL老闆的社群，請訪客幫忙按讚、留言、分享。
+'''
+instruction = [{"role": "system", "content": system_prompt}]
 threads = {}
 def assistant_reply(event, user_text):
     if event.source.type == 'user':
