@@ -51,7 +51,7 @@ configuration = Configuration(access_token=channel_access_token)
 handler = WebhookHandler(channel_secret)
 @handler.add(MessageEvent, message=TextMessageContent)
 def handle_text_message(event):
-    if event.source.user_id in blacklist:
+    if event.source.user_id in blacklist or eval(f'event.source.{event.source.type}_id') in blacklist:
         # terminator(event)
         return
     if event.source.type != 'user':
@@ -77,7 +77,7 @@ def handle_sticker_message(event):
         )
 @handler.add(MessageEvent, message=AudioMessageContent)
 def handle_audio_message(event):
-    if event.source.user_id in blacklist:
+    if event.source.user_id in blacklist or eval(f'event.source.{event.source.type}_id') in blacklist:
         # terminator(event)
         return
     with ApiClient(configuration) as api_client:
