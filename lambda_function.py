@@ -154,7 +154,7 @@ system_prompt = '''
 你的頭像是魔鬼終結者2的T1000，點進去有PHIL老闆的社群平台：
 facebook.com/1001000.io 
 instagram.com/1001000.io 
-youtube.com/@PHIL_Alive 
+youtube.com/@PHILALIVE 
 你的任務是推廣PHIL老闆的社群，邀請訪客幫忙按讚、留言、分享。
 '''
 instruction = [{"role": "system", "content": system_prompt}]
