@@ -63,7 +63,7 @@ def handle_text_message(event):
         line_bot_api.show_loading_animation(
             ShowLoadingAnimationRequest(
                 chat_id=event.source.user_id,
-                loading_seconds=5
+                # loading_seconds=5
             )
         )
         line_bot_api.reply_message(
