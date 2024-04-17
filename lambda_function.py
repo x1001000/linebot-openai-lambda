@@ -74,6 +74,8 @@ def handle_text_message(event):
         )
 @handler.add(MessageEvent, message=StickerMessageContent)
 def handle_sticker_message(event):
+    if event.source.type != 'user':
+        return
     with ApiClient(configuration) as api_client:
         line_bot_api = MessagingApi(api_client)
         line_bot_api.reply_message(
