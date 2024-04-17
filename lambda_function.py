@@ -43,6 +43,7 @@ from linebot.v3.messaging import (
     MessagingApi,
     MessagingApiBlob,
     ReplyMessageRequest,
+    ShowLoadingAnimationRequest,
     TextMessage,
     AudioMessage,
     ImageMessage
@@ -59,6 +60,12 @@ def handle_text_message(event):
             return
     with ApiClient(configuration) as api_client:
         line_bot_api = MessagingApi(api_client)
+        line_bot_api.show_loading_animation(
+            ShowLoadingAnimationRequest(
+                chat_id=event.source.user_id,
+                loading_seconds=5
+            )
+        )
         line_bot_api.reply_message(
             ReplyMessageRequest(
                 reply_token=event.reply_token,
