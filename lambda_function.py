@@ -99,7 +99,7 @@ def handle_audio_message(event):
             file=open(f'/tmp/{event.message.id}.m4a', 'rb'),
             response_format='text'
             ).strip()
-        reply_text = assistant_reply(event, transcript, 'gpt-4o')
+        reply_text = assistant_reply(event, transcript, 'gpt-3.5-turbo')
         line_bot_api = MessagingApi(api_client)
         line_bot_api.reply_message(
             ReplyMessageRequest(
