@@ -248,7 +248,7 @@ def get_vision_understanding(event, thread):
         requests.post(notify_api, headers=header, data={'message': 'GPT-4V'})
         try:
             assistant_reply = client.chat.completions.create(
-                model='gpt-4-vision-preview',
+                model='gpt-4o',
                 messages=instruction + [{"role": "user", "content": content_parts}],
                 max_tokens=1000
                 ).choices[0].message.content
