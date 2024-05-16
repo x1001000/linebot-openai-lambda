@@ -69,7 +69,7 @@ def handle_text_message(event):
         line_bot_api.reply_message(
             ReplyMessageRequest(
                 reply_token=event.reply_token,
-                messages=[TextMessage(text=assistant_reply(event, event.message.text))]
+                messages=[TextMessage(text=assistant_reply(event, event.message.text, 'gpt-3.5-turbo'))]
             )
         )
 @handler.add(MessageEvent, message=StickerMessageContent)
@@ -99,7 +99,7 @@ def handle_audio_message(event):
             file=open(f'/tmp/{event.message.id}.m4a', 'rb'),
             response_format='text'
             ).strip()
-        reply_text = assistant_reply(event, transcript)
+        reply_text = assistant_reply(event, transcript, 'gpt-4o')
         line_bot_api = MessagingApi(api_client)
         line_bot_api.reply_message(
             ReplyMessageRequest(
@@ -159,7 +159,7 @@ youtube.com/@PHILALIVE
 '''
 instruction = [{"role": "system", "content": system_prompt}]
 threads = {}
-def assistant_reply(event, user_text):
+def assistant_reply(event, user_text, model):
     if event.source.type == 'user':
         source_id = event.source.user_id
     elif event.source.type == 'group':
@@ -173,7 +173,7 @@ def assistant_reply(event, user_text):
     conversation.append({"role": "user", "content": user_text})
     try:
         completion = client.chat.completions.create(
-            model="gpt-3.5-turbo",
+            model=model,
             messages=instruction + conversation,
             tools=tools
             )
