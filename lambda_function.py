@@ -235,10 +235,10 @@ def ImageMessageContent_s3_url(image_just_sent):
     return f'https://{bucket_name}.s3.ap-northeast-1.amazonaws.com/{object_name}'
 
 tools = [
-    {'type': 'function', 'function': {'name': 'get_vision_understanding'}},
-    {'type': 'function', 'function': {'name': 'generate_an_image'}},
+    {'type': 'function', 'function': {'name': 'input_an_image_to_AI'}},
+    {'type': 'function', 'function': {'name': 'output_an_image_from_AI'}},
     ]
-def get_vision_understanding(event, thread):
+def input_an_image_to_AI(event, thread):
     user_text = thread['conversation'][-1]['content']
     image_just_sent = thread.get('image_just_sent')
     if image_just_sent:
@@ -258,7 +258,7 @@ def get_vision_understanding(event, thread):
     else:
         assistant_reply = '如果要我幫忙圖像理解，請先傳圖再提問喔👀'
     return assistant_reply
-def generate_an_image(event, thread):
+def output_an_image_from_AI(event, thread):
     if event.source.type == 'user':
         source_id = event.source.user_id
     elif event.source.type == 'group':
