@@ -52,7 +52,9 @@ configuration = Configuration(access_token=channel_access_token)
 handler = WebhookHandler(channel_secret)
 @handler.add(MessageEvent, message=TextMessageContent)
 def handle_text_message(event):
-    if event.source.user_id in blacklist or eval(f'event.source.{event.source.type}_id') in blacklist:
+    if event.source.user_id in whitelist or eval(f'event.source.{event.source.type}_id') in whitelist:
+        pass
+    else:
         # terminator(event)
         return
     if event.source.type != 'user':
@@ -86,7 +88,9 @@ def handle_sticker_message(event):
         )
 @handler.add(MessageEvent, message=AudioMessageContent)
 def handle_audio_message(event):
-    if event.source.user_id in blacklist or eval(f'event.source.{event.source.type}_id') in blacklist:
+    if event.source.user_id in whitelist or eval(f'event.source.{event.source.type}_id') in whitelist:
+        pass
+    else:
         # terminator(event)
         return
     with ApiClient(configuration) as api_client:
@@ -129,8 +133,6 @@ def handle_image_message(event):
 
 with open('whitelist.txt') as f:
     whitelist = [line.split()[0] for line in f]
-with open('blacklist.txt') as f:
-    blacklist = [line.strip() for line in f]
 def terminator(event):
     with ApiClient(configuration) as api_client:
         line_bot_api = MessagingApi(api_client)
@@ -169,7 +171,7 @@ def assistant_reply(event, user_text, model):
 #   thread is threads[source_id] as long as both not to be reassigned
     thread = threads[source_id] = threads.get(source_id, {})
 #   conversation is thread['conversation'] until thread['conversation'] to be reassigned
-    conversation = thread['conversation'] = thread.get('conversation', [{"role": "assistant", "content": "我是GPT-1000，代號T1000，若在群組中要叫我我才會回。PHIL老闆交代我要有問必答，如果你不喜歡打字，也可以傳語音訊息給我，我也會回語音喔！😎"}])
+    conversation = thread['conversation'] = thread.get('conversation', [{"role": "assistant", "content": "我是GPT-1000，代號T1000，若在群組中要叫我我才會回。PHIL老闆交代我已讀不回陌生人，如果你是PHIL老闆或他的親朋好友，我才會有問必答，如果你不喜歡打字，也可以傳語音訊息給我，我也會回語音，我還會看圖和生圖喔！😎"}])
     conversation.append({"role": "user", "content": user_text})
     try:
         completion = client.chat.completions.create(
