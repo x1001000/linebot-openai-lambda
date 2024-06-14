@@ -71,7 +71,7 @@ def handle_text_message(event):
         line_bot_api.reply_message(
             ReplyMessageRequest(
                 reply_token=event.reply_token,
-                messages=[TextMessage(text=assistant_reply(event, event.message.text, 'gpt-3.5-turbo'))]
+                messages=[TextMessage(text=assistant_reply(event, event.message.text, 'gpt-4o'))]
             )
         )
 @handler.add(MessageEvent, message=StickerMessageContent)
@@ -103,7 +103,7 @@ def handle_audio_message(event):
             file=open(f'/tmp/{event.message.id}.m4a', 'rb'),
             response_format='text'
             ).strip()
-        reply_text = assistant_reply(event, transcript, 'gpt-3.5-turbo')
+        reply_text = assistant_reply(event, transcript, 'gpt-4o')
         line_bot_api = MessagingApi(api_client)
         line_bot_api.reply_message(
             ReplyMessageRequest(
