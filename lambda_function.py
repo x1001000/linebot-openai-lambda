@@ -163,7 +163,7 @@ youtube.com/@PHILALIVE
 '''
 instruction = [{"role": "system", "content": system_prompt}]
 threads = {}
-def assistant_reply(event, user_text, model='llama3'):
+def assistant_reply(event, user_text, model='cwchang/llama-3-taiwan-8b-instruct'):
     if event.source.type == 'user':
         source_id = event.source.user_id
     elif event.source.type == 'group':
