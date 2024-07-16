@@ -2,7 +2,7 @@ import os
 notify_access_token = os.getenv('LINE_NOTIFY_ACCESS_TOKEN')
 channel_access_token = os.getenv('LINE_CHANNEL_ACCESS_TOKEN')
 channel_secret = os.getenv('LINE_CHANNEL_SECRET')
-base_url = os.getenv('BASE_URL')
+hostname = os.getenv('OLLAMA_HOSTNAME')
 
 import requests
 notify_api = 'https://notify-api.line.me/api/notify'
@@ -28,6 +28,7 @@ def god_mode(Q, A):
     requests.post(notify_api, headers=header, data={'message': Q+A})
 
 import re
+import base64
 from linebot.v3 import (
     WebhookHandler
 )
@@ -53,11 +54,6 @@ configuration = Configuration(access_token=channel_access_token)
 handler = WebhookHandler(channel_secret)
 @handler.add(MessageEvent, message=TextMessageContent)
 def handle_text_message(event):
-    # if event.source.user_id in whitelist or eval(f'event.source.{event.source.type}_id') in whitelist:
-    #     pass
-    # else:
-    #     # terminator(event)
-    #     return
     if event.source.type != 'user':
         if not re.search('[Tt]-?1000', event.message.text):
             return
@@ -89,48 +85,60 @@ def handle_sticker_message(event):
         )
 @handler.add(MessageEvent, message=AudioMessageContent)
 def handle_audio_message(event):
-    if event.source.user_id in whitelist or eval(f'event.source.{event.source.type}_id') in whitelist:
-        pass
-    else:
-        # terminator(event)
+    if event.source.user_id not in whitelist and eval(f'event.source.{event.source.type}_id') not in whitelist:
         return
     with ApiClient(configuration) as api_client:
         line_bot_blob_api = MessagingApiBlob(api_client)
-        message_content = line_bot_blob_api.get_message_content(message_id=event.message.id)
-        with open(f'/tmp/{event.message.id}.m4a', 'wb') as tf:
-            tf.write(message_content)
-        transcript = client.audio.transcriptions.create(
-            model='whisper-1',
-            file=open(f'/tmp/{event.message.id}.m4a', 'rb'),
-            response_format='text'
-            ).strip()
-        reply_text = assistant_reply(event, transcript)
-        line_bot_api = MessagingApi(api_client)
-        line_bot_api.reply_message(
-            ReplyMessageRequest(
-                reply_token=event.reply_token,
-                messages=[
-                    TextMessage(text=reply_text),
-                    AudioMessage(
-                        original_content_url=TTS_s3_url(reply_text, event.message.id),
-                        duration=60000)]
-            )
+    message_content = line_bot_blob_api.get_message_content(message_id=event.message.id)
+    with open(f'/tmp/{event.message.id}.m4a', 'wb') as tf:
+        tf.write(message_content)
+    transcript = client.audio.transcriptions.create(
+        model='whisper-1',
+        file=open(f'/tmp/{event.message.id}.m4a', 'rb'),
+        response_format='text'
+        ).strip()
+    reply_text = assistant_reply(event, transcript)
+    line_bot_api = MessagingApi(api_client)
+    line_bot_api.reply_message(
+        ReplyMessageRequest(
+            reply_token=event.reply_token,
+            messages=[
+                TextMessage(text=reply_text),
+                AudioMessage(
+                    original_content_url=TTS_s3_url(reply_text, event.message.id),
+                    duration=60000)]
         )
+    )
 @handler.add(MessageEvent, message=ImageMessageContent)
 def handle_image_message(event):
+    if event.source.user_id not in whitelist and eval(f'event.source.{event.source.type}_id') not in whitelist:
+        return
     with ApiClient(configuration) as api_client:
         line_bot_blob_api = MessagingApiBlob(api_client)
-        message_content = line_bot_blob_api.get_message_content(message_id=event.message.id)
-        with open(f'/tmp/{event.message.id}.jpg', 'wb') as tf:
-            tf.write(message_content)
-    if event.source.type == 'user':
-        source_id = event.source.user_id
-    elif event.source.type == 'group':
-        source_id = event.source.group_id
-    elif event.source.type == 'room':
-        source_id = event.source.room_id
-    threads[source_id] = threads.get(source_id, {})
-    threads[source_id]['image_just_sent'] = f'/tmp/{event.message.id}.jpg'
+    message_content = line_bot_blob_api.get_message_content(message_id=event.message.id)
+    with open(f'/tmp/{event.message.id}.jpg', 'wb') as tf:
+        tf.write(message_content)
+    source_id = eval(f'event.source.{event.source.type}_id') # user/group/room
+    thread = threads[source_id] = threads.get(source_id, {})
+    thread['latest_image'] = f'/tmp/{event.message.id}.jpg'
+    user_text = '使用繁體中文描述'
+    conversation = thread['conversation'] = thread.get('conversation', [{"role": "assistant", "content": "我是GPT-1000，代號T1000，若在群組中要叫我我才會回。PHIL老闆交代我要有問必答，如果你是PHIL老闆或他的親朋好友，也可以傳語音訊息給我，我也會回語音，我還會看圖和生圖喔！😎"}])
+    conversation.append({"role": "user", "content": user_text})
+    payload = {
+        'model': 'llava-llama3',
+        'prompt': user_text,
+        'images': [base64.b64encode(message_content).decode('utf-8')],
+        'stream': False}
+    requests.post(notify_api, headers=header, data={'message': 'LLaVA'})
+    try:
+        assistant_reply = requests.post(f'{hostname}/api/generate', data=json.dumps(payload)).json()['response']
+    except Exception as e:
+        requests.post(notify_api, headers=header, data={'message': e})
+        assistant_reply = ''
+    finally:
+        conversation.append({"role": "assistant", "content": assistant_reply})
+        thread['conversation'] = conversation[-10:]
+        god_mode(Q=user_text, A=assistant_reply)
 
 with open('whitelist.txt') as f:
     whitelist = [line.split()[0] for line in f]
@@ -150,7 +158,7 @@ def terminator(event):
 import openai
 from openai import OpenAI
 client = OpenAI()
-ollama = OpenAI(base_url=base_url, api_key='ollama')
+ollama = OpenAI(base_url=f'{hostname}/v1', api_key='ollama')
 
 system_prompt = '''
 你是GPT-1000，代號T1000，是十百千實驗室的研究助理、PHIL老闆的社群小編。
@@ -164,12 +172,7 @@ youtube.com/@PHILALIVE
 instruction = [{"role": "system", "content": system_prompt}]
 threads = {}
 def assistant_reply(event, user_text, model='cwchang/llama-3-taiwan-8b-instruct'):
-    if event.source.type == 'user':
-        source_id = event.source.user_id
-    elif event.source.type == 'group':
-        source_id = event.source.group_id
-    elif event.source.type == 'room':
-        source_id = event.source.room_id
+    source_id = eval(f'event.source.{event.source.type}_id') # user/group/room
 #   thread is threads[source_id] as long as both not to be reassigned
     thread = threads[source_id] = threads.get(source_id, {})
 #   conversation is thread['conversation'] until thread['conversation'] to be reassigned
@@ -191,8 +194,6 @@ def assistant_reply(event, user_text, model='cwchang/llama-3-taiwan-8b-instruct'
             for tool_call in tool_calls:
                 requests.post(notify_api, headers=header, data={'message': 'CALL-OUT'})
                 assistant_reply = eval(tool_call.function.name)(event, thread)
-        else:
-            thread['image_just_sent'] = None
     finally:
         conversation.append({"role": "assistant", "content": assistant_reply})
         thread['conversation'] = conversation[-10:]
@@ -231,9 +232,9 @@ def TTS_s3_url(text, message_id):
     client.audio.speech.create(model='tts-1', voice='alloy', input=text).stream_to_file(file_name)
     boto3.client('s3').upload_file(file_name, bucket_name, object_name)
     return f'https://{bucket_name}.s3.ap-northeast-1.amazonaws.com/{object_name}'
-def ImageMessageContent_s3_url(image_just_sent):
-    file_name = image_just_sent
-    object_name = f'GPT-1000/{image_just_sent[5:]}'
+def ImageMessageContent_s3_url(latest_image):
+    file_name = latest_image
+    object_name = f'GPT-1000/{latest_image[5:]}'
     bucket_name = 'x1001000-public'
     boto3.client('s3').upload_file(file_name, bucket_name, object_name)
     return f'https://{bucket_name}.s3.ap-northeast-1.amazonaws.com/{object_name}'
@@ -244,11 +245,11 @@ tools = [
     ]
 def input_an_image_to_AI(event, thread):
     user_text = thread['conversation'][-1]['content']
-    image_just_sent = thread.get('image_just_sent')
-    if image_just_sent:
+    latest_image = thread.get('latest_image')
+    if latest_image:
         content_parts = []
         content_parts.append({'type': 'text', 'text': user_text})
-        content_parts.append({'type': 'image_url', 'image_url': {'url': ImageMessageContent_s3_url(image_just_sent)}})
+        content_parts.append({'type': 'image_url', 'image_url': {'url': ImageMessageContent_s3_url(latest_image)}})
         requests.post(notify_api, headers=header, data={'message': 'GPT-4V'})
         try:
             assistant_reply = client.chat.completions.create(
@@ -263,12 +264,7 @@ def input_an_image_to_AI(event, thread):
         assistant_reply = '如果要我幫忙圖像理解，請先傳圖再提問喔👀'
     return assistant_reply
 def output_an_image_from_AI(event, thread):
-    if event.source.type == 'user':
-        source_id = event.source.user_id
-    elif event.source.type == 'group':
-        source_id = event.source.group_id
-    elif event.source.type == 'room':
-        source_id = event.source.room_id
+    source_id = eval(f'event.source.{event.source.type}_id') # user/group/room
     if source_id not in whitelist:
         return '我的圖像生成服務只提供PHIL老闆和他的家人朋友群組喔！如果你想請他喝咖啡，可以點我的頭像找到他👈'
     user_text = thread['conversation'][-1]['content']
