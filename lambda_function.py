@@ -7,6 +7,7 @@ hostname = os.getenv('OLLAMA_HOSTNAME')
 import requests
 notify_api = 'https://notify-api.line.me/api/notify'
 header = {'Authorization': f'Bearer {notify_access_token}'}
+requests.post(notify_api, headers=header, data={'message': 'lambda_function.py'})
 def debug_mode(request_body):
     # https://developers.line.biz/en/reference/messaging-api/#request-body
     # destination = request_body['destination']
@@ -19,7 +20,7 @@ def debug_mode(request_body):
     elif events[0]['type'] == 'unfollow':
         requests.post(notify_api, headers=header, data={'message': f"unfollowed by {events[0]['source']['type']}Id\n" + events[0]['source'][f"{events[0]['source']['type']}Id"]})
     elif events[0]['type'] == 'message':
-        requests.post(notify_api, headers=header, data={'message': f"{events[0]['message']['type']} message from {events[0]['source']['type']}Id\n" + events[0]['source'][f"{events[0]['source']['type']}Id"]})
+        requests.post(notify_api, headers=header, data={'message': f"{events[0]['message']['type']} from {events[0]['source']['type']}Id\n" + events[0]['source'][f"{events[0]['source']['type']}Id"]})
     else:
         requests.post(notify_api, headers=header, data={'message': f"{events[0]['type']}"})
 def god_mode(Q, A):
@@ -204,7 +205,7 @@ def assistant_reply(event, user_text, model='cwchang/llama-3-taiwan-8b-instruct'
 import json
 
 def lambda_handler(event, context):
-    # TODO implement
+    requests.post(notify_api, headers=header, data={'message': 'lambda_handler()'})
     body = event['body']
     signature = event['headers']['x-line-signature']
     debug_mode(json.loads(body))
