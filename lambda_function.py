@@ -119,13 +119,12 @@ def handle_image_message(event):
     message_content = line_bot_blob_api.get_message_content(message_id=event.message.id)
     with open(f'/tmp/{event.message.id}.jpg', 'wb') as tf:
         tf.write(message_content)
-    source_id = eval(f'event.source.{event.source.type}_id') # user/group/room
-    item = threads.get_item(Key={'id': source_id}).get('Item')#threads[source_id] = threads.get(source_id, {})
-    thread = json.loads(item['thread']) if item else {}
-    thread['latest_image'] = f'/tmp/{event.message.id}.jpg'
     user_text = '描述你看到的影像，使用繁體中文：'
-    conversation = thread['conversation'] = thread.get('conversation', [{"role": "assistant", "content": "我是GPT-1000，代號T1000，若在群組中要叫我我才會回。PHIL老闆交代我要有問必答，如果你是PHIL老闆或他的親朋好友，也可以傳語音訊息給我，我也會回語音，我還會看圖和生圖喔！😎"}])
+    source_id = eval(f'event.source.{event.source.type}_id') # user/group/room
+    item = threads.get_item(Key={'id': source_id}).get('Item', {})
+    conversation = json.loads(item['conversation']) if item else [{"role": "assistant", "content": "我是GPT-1000，代號T1000，若在群組中要叫我我才會回。PHIL老闆交代我要有問必答，如果你是PHIL老闆或他的親朋好友，也可以傳語音訊息給我，我也會回語音，我還會看圖和生圖喔！😎"}]
     conversation.append({"role": "user", "content": user_text})
+    # item['latest_image'] = f'/tmp/{event.message.id}.jpg' # for GPT-4V
     payload = {
         'model': 'llava-llama3',
         'prompt': user_text,
@@ -139,8 +138,8 @@ def handle_image_message(event):
         assistant_reply = ''
     finally:
         conversation.append({"role": "assistant", "content": assistant_reply})
-        thread['conversation'] = conversation[-10:]
-        threads.put_item(Item={'id': source_id, 'thread': json.dumps(thread)})
+        item['conversation'] = conversation[-10:]
+        threads.put_item(Item={'id': source_id, 'conversation': json.dumps(item['conversation'])})
         god_mode(Q=user_text, A=assistant_reply)
 
 with open('whitelist.txt') as f:
@@ -173,14 +172,10 @@ youtube.com/@PHILALIVE
 你的任務是推廣PHIL老闆的社群，邀請訪客幫忙按讚、留言、分享。
 '''
 instruction = [{"role": "system", "content": system_prompt}]
-threads = {}
 def assistant_reply(event, user_text, model='cwchang/llama-3-taiwan-8b-instruct'):
     source_id = eval(f'event.source.{event.source.type}_id') # user/group/room
-#   thread is threads[source_id] as long as both not to be reassigned
-    item = threads.get_item(Key={'id': source_id}).get('Item')#threads[source_id] = threads.get(source_id, {})
-    thread = json.loads(item['thread']) if item else {}
-#   conversation is thread['conversation'] until thread['conversation'] to be reassigned
-    conversation = thread['conversation'] = thread.get('conversation', [{"role": "assistant", "content": "我是GPT-1000，代號T1000，若在群組中要叫我我才會回。PHIL老闆交代我要有問必答，如果你是PHIL老闆或他的親朋好友，也可以傳語音訊息給我，我也會回語音，我還會看圖和生圖喔！😎"}])
+    item = threads.get_item(Key={'id': source_id}).get('Item', {})
+    conversation = json.loads(item['conversation']) if item else [{"role": "assistant", "content": "我是GPT-1000，代號T1000，若在群組中要叫我我才會回。PHIL老闆交代我要有問必答，如果你是PHIL老闆或他的親朋好友，也可以傳語音訊息給我，我也會回語音，我還會看圖和生圖喔！😎"}]
     conversation.append({"role": "user", "content": user_text})
     try:
         completion = ollama.chat.completions.create(
@@ -197,11 +192,12 @@ def assistant_reply(event, user_text, model='cwchang/llama-3-taiwan-8b-instruct'
         if tool_calls:
             for tool_call in tool_calls:
                 requests.post(notify_api, headers=header, data={'message': 'CALL-OUT'})
-                assistant_reply = eval(tool_call.function.name)(event, thread)
+                item['conversation'] = conversation
+                assistant_reply = eval(tool_call.function.name)(event, item)
     finally:
         conversation.append({"role": "assistant", "content": assistant_reply})
-        thread['conversation'] = conversation[-10:]
-        threads.put_item(Item={'id': source_id, 'thread': json.dumps(thread)})
+        item['conversation'] = conversation[-10:]
+        threads.put_item(Item={'id': source_id, 'conversation': json.dumps(item['conversation'])})
         god_mode(Q=user_text, A=assistant_reply)
         return assistant_reply
 
@@ -249,9 +245,9 @@ tools = [
     {'type': 'function', 'function': {'name': 'input_an_image_to_AI'}},
     {'type': 'function', 'function': {'name': 'output_an_image_from_AI'}},
     ]
-def input_an_image_to_AI(event, thread):
-    user_text = thread['conversation'][-1]['content']
-    latest_image = thread.get('latest_image')
+def input_an_image_to_AI(event, item):
+    user_text = item['conversation'][-1]['content']
+    latest_image = item.get('latest_image')
     if latest_image:
         content_parts = []
         content_parts.append({'type': 'text', 'text': user_text})
@@ -269,11 +265,11 @@ def input_an_image_to_AI(event, thread):
     else:
         assistant_reply = '如果要我幫忙圖像理解，請先傳圖再提問喔👀'
     return assistant_reply
-def output_an_image_from_AI(event, thread):
+def output_an_image_from_AI(event, item):
     source_id = eval(f'event.source.{event.source.type}_id') # user/group/room
     if source_id not in whitelist:
         return '我的圖像生成服務只提供PHIL老闆和他的家人朋友群組喔！如果你想請他喝咖啡，可以點我的頭像找到他👈'
-    user_text = thread['conversation'][-1]['content']
+    user_text = item['conversation'][-1]['content']
     requests.post(notify_api, headers=header, data={'message': 'DALL·E 3'})
     try:
         image_url = client.images.generate(model='dall-e-3', prompt=user_text).data[0].url
