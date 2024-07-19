@@ -123,7 +123,7 @@ def handle_image_message(event):
     item = threads.get_item(Key={'id': source_id}).get('Item')#threads[source_id] = threads.get(source_id, {})
     thread = json.loads(item['thread']) if item else {}
     thread['latest_image'] = f'/tmp/{event.message.id}.jpg'
-    user_text = '使用繁體中文描述'
+    user_text = '描述你看到的影像，使用繁體中文：'
     conversation = thread['conversation'] = thread.get('conversation', [{"role": "assistant", "content": "我是GPT-1000，代號T1000，若在群組中要叫我我才會回。PHIL老闆交代我要有問必答，如果你是PHIL老闆或他的親朋好友，也可以傳語音訊息給我，我也會回語音，我還會看圖和生圖喔！😎"}])
     conversation.append({"role": "user", "content": user_text})
     payload = {
