@@ -9,7 +9,7 @@ notify_api = 'https://notify-api.line.me/api/notify'
 header = {'Authorization': f'Bearer {notify_access_token}'}
 requests.post(notify_api, headers=header, data={'message': 'lambda_function.py'})
 def debug_mode(request_body):
-    # https://developers.line.biz/en/reference/messaging-api/#request-body
+    # # https://developers.line.biz/en/reference/messaging-api/#request-body
     # destination = request_body['destination']
     # requests.post(notify_api, headers=header, data={'message': destination})
     events = request_body['events']
@@ -205,7 +205,7 @@ def assistant_reply(event, user_text, model='cwchang/llama-3-taiwan-8b-instruct'
 import json
 
 def lambda_handler(event, context):
-    requests.post(notify_api, headers=header, data={'message': 'lambda_handler()'})
+    # requests.post(notify_api, headers=header, data={'message': 'lambda_handler()'})
     body = event['body']
     signature = event['headers']['x-line-signature']
     debug_mode(json.loads(body))
