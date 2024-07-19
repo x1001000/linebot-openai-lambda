@@ -120,7 +120,8 @@ def handle_image_message(event):
     with open(f'/tmp/{event.message.id}.jpg', 'wb') as tf:
         tf.write(message_content)
     source_id = eval(f'event.source.{event.source.type}_id') # user/group/room
-    thread = threads[source_id] = threads.get(source_id, {})
+    item = threads.get_item(Key={'id': source_id}).get('Item')#threads[source_id] = threads.get(source_id, {})
+    thread = json.loads(item['thread']) if item else {}
     thread['latest_image'] = f'/tmp/{event.message.id}.jpg'
     user_text = '使用繁體中文描述'
     conversation = thread['conversation'] = thread.get('conversation', [{"role": "assistant", "content": "我是GPT-1000，代號T1000，若在群組中要叫我我才會回。PHIL老闆交代我要有問必答，如果你是PHIL老闆或他的親朋好友，也可以傳語音訊息給我，我也會回語音，我還會看圖和生圖喔！😎"}])
@@ -139,6 +140,7 @@ def handle_image_message(event):
     finally:
         conversation.append({"role": "assistant", "content": assistant_reply})
         thread['conversation'] = conversation[-10:]
+        threads.put_item(Item={'id': source_id, 'thread': json.dumps(thread)})
         god_mode(Q=user_text, A=assistant_reply)
 
 with open('whitelist.txt') as f:
@@ -175,7 +177,8 @@ threads = {}
 def assistant_reply(event, user_text, model='cwchang/llama-3-taiwan-8b-instruct'):
     source_id = eval(f'event.source.{event.source.type}_id') # user/group/room
 #   thread is threads[source_id] as long as both not to be reassigned
-    thread = threads[source_id] = threads.get(source_id, {})
+    item = threads.get_item(Key={'id': source_id}).get('Item')#threads[source_id] = threads.get(source_id, {})
+    thread = json.loads(item['thread']) if item else {}
 #   conversation is thread['conversation'] until thread['conversation'] to be reassigned
     conversation = thread['conversation'] = thread.get('conversation', [{"role": "assistant", "content": "我是GPT-1000，代號T1000，若在群組中要叫我我才會回。PHIL老闆交代我要有問必答，如果你是PHIL老闆或他的親朋好友，也可以傳語音訊息給我，我也會回語音，我還會看圖和生圖喔！😎"}])
     conversation.append({"role": "user", "content": user_text})
@@ -198,6 +201,7 @@ def assistant_reply(event, user_text, model='cwchang/llama-3-taiwan-8b-instruct'
     finally:
         conversation.append({"role": "assistant", "content": assistant_reply})
         thread['conversation'] = conversation[-10:]
+        threads.put_item(Item={'id': source_id, 'thread': json.dumps(thread)})
         god_mode(Q=user_text, A=assistant_reply)
         return assistant_reply
 
@@ -218,6 +222,7 @@ def lambda_handler(event, context):
 
 # from gtts import gTTS
 import boto3
+threads = boto3.resource('dynamodb').Table('threads')
 def TTS_s3_url(text, message_id):
     file_name = f'/tmp/{message_id}.mp3'
     object_name = f'GPT-1000/{message_id}.mp3'
