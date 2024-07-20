@@ -119,7 +119,7 @@ def handle_image_message(event):
     message_content = line_bot_blob_api.get_message_content(message_id=event.message.id)
     with open(f'/tmp/{event.message.id}.jpg', 'wb') as tf:
         tf.write(message_content)
-    user_text = '描述你看到的影像，使用繁體中文：'
+    user_text = '請使用繁體中文描述圖像'
     source_id = eval(f'event.source.{event.source.type}_id') # user/group/room
     item = threads.get_item(Key={'id': source_id}).get('Item', {})
     conversation = json.loads(item['conversation']) if item else [{"role": "assistant", "content": "我是GPT-1000，代號T1000，若在群組中要叫我我才會回。PHIL老闆交代我要有問必答，如果你是PHIL老闆或他的親朋好友，也可以傳語音訊息給我，我也會回語音，我還會看圖和生圖喔！😎"}]
@@ -137,6 +137,7 @@ def handle_image_message(event):
         requests.post(notify_api, headers=header, data={'message': e})
         assistant_reply = ''
     finally:
+        assistant_reply += '\n\n關於這個圖像內容，歡迎你稍後再次提問。'
         conversation.append({"role": "assistant", "content": assistant_reply})
         item['conversation'] = conversation[-10:]
         threads.put_item(Item={'id': source_id, 'conversation': json.dumps(item['conversation'])})
