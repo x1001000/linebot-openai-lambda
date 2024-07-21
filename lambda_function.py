@@ -133,11 +133,11 @@ def handle_image_message(event):
     requests.post(notify_api, headers=header, data={'message': 'LLaVA'})
     try:
         assistant_reply = requests.post(f'{hostname}/api/generate', data=json.dumps(payload)).json()['response']
+        assistant_reply += '\n\n關於這個圖像內容，歡迎你稍後再次提問。'
     except Exception as e:
         requests.post(notify_api, headers=header, data={'message': e})
         assistant_reply = ''
     finally:
-        assistant_reply += '\n\n關於這個圖像內容，歡迎你稍後再次提問。'
         conversation.append({"role": "assistant", "content": assistant_reply})
         item['conversation'] = conversation[-10:]
         threads.put_item(Item={'id': source_id, 'conversation': json.dumps(item['conversation'])})
