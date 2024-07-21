@@ -184,10 +184,6 @@ def assistant_reply(event, user_text, model='kenneth85/llama-3-taiwan'):
             messages=instruction + conversation,
             tools=tools
             )
-    except Exception as e:
-        requests.post(notify_api, headers=header, data={'message': e})
-        assistant_reply = ''
-    else:
         assistant_reply = completion.choices[0].message.content
         tool_calls = completion.choices[0].message.tool_calls
         if tool_calls:
@@ -195,6 +191,9 @@ def assistant_reply(event, user_text, model='kenneth85/llama-3-taiwan'):
                 requests.post(notify_api, headers=header, data={'message': 'CALL-OUT'})
                 item['conversation'] = conversation
                 assistant_reply = eval(tool_call.function.name)(event, item)
+    except Exception as e:
+        requests.post(notify_api, headers=header, data={'message': e})
+        assistant_reply = ''
     finally:
         conversation.append({"role": "assistant", "content": assistant_reply})
         item['conversation'] = conversation[-10:]
@@ -209,7 +208,7 @@ def lambda_handler(event, context):
     # requests.post(notify_api, headers=header, data={'message': 'lambda_handler()'})
     body = event['body']
     signature = event['headers']['x-line-signature']
-    debug_mode(json.loads(body))
+    # debug_mode(json.loads(body))
     handler.handle(body, signature)
     return {
         'statusCode': 200,
