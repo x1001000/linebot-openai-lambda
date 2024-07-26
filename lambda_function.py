@@ -242,10 +242,10 @@ def ImageMessageContent_s3_url(latest_image):
     return f'https://{bucket_name}.s3.ap-northeast-1.amazonaws.com/{object_name}'
 
 tools = [
-    {'type': 'function', 'function': {'name': 'input_an_image_to_AI'}},
-    {'type': 'function', 'function': {'name': 'output_an_image_from_AI'}},
+    # {'type': 'function', 'function': {'name': 'request_to_see_an_image'}},
+    {'type': 'function', 'function': {'name': 'request_to_generate_an_image'}},
     ]
-def input_an_image_to_AI(event, item):
+def request_to_see_an_image(event, item):
     user_text = item['conversation'][-1]['content']
     latest_image = item.get('latest_image')
     if latest_image:
@@ -265,7 +265,7 @@ def input_an_image_to_AI(event, item):
     else:
         assistant_reply = '如果要我幫忙圖像理解，請先傳圖再提問喔👀'
     return assistant_reply
-def output_an_image_from_AI(event, item):
+def request_to_generate_an_image(event, item):
     source_id = eval(f'event.source.{event.source.type}_id') # user/group/room
     if source_id not in whitelist:
         return '我的圖像生成服務只提供PHIL老闆和他的家人朋友群組喔！如果你想請他喝咖啡，可以點我的頭像找到他👈'
