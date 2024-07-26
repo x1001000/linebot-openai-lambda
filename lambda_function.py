@@ -173,7 +173,7 @@ youtube.com/@PHILALIVE
 你的任務是推廣PHIL老闆的社群，邀請訪客幫忙按讚、留言、分享。
 '''
 instruction = [{"role": "system", "content": system_prompt}]
-def assistant_reply(event, user_text, model='kenneth85/llama-3-taiwan'):
+def assistant_reply(event, user_text, model='llama3.1'):
     source_id = eval(f'event.source.{event.source.type}_id') # user/group/room
     item = threads.get_item(Key={'id': source_id}).get('Item', {})
     conversation = json.loads(item['conversation']) if item else [{"role": "assistant", "content": "我是GPT-1000，代號T1000，若在群組中要叫我我才會回。PHIL老闆交代我要有問必答，如果你是PHIL老闆或他的親朋好友，也可以傳語音訊息給我，我也會回語音，我還會看圖和生圖喔！😎"}]
