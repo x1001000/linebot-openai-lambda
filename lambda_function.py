@@ -93,7 +93,7 @@ def handle_audio_message(event):
     message_content = line_bot_blob_api.get_message_content(message_id=event.message.id)
     with open(f'/tmp/{event.message.id}.m4a', 'wb') as tf:
         tf.write(message_content)
-    transcript = client.audio.transcriptions.create(
+    transcript = openai_client.audio.transcriptions.create(
         model='whisper-1',
         file=open(f'/tmp/{event.message.id}.m4a', 'rb'),
         response_format='text'
@@ -130,7 +130,6 @@ def handle_image_message(event):
         'prompt': user_text,
         'images': [base64.b64encode(message_content).decode('utf-8')],
         'stream': False}
-    requests.post(notify_api, headers=header, data={'message': 'LLaVA'})
     try:
         assistant_reply = requests.post(f'{hostname}/api/generate', data=json.dumps(payload)).json()['response']
         assistant_reply += '\n\n關於這個圖像內容，歡迎你稍後再次提問。'
@@ -160,8 +159,8 @@ def terminator(event):
 
 import openai
 from openai import OpenAI
-client = OpenAI()
-ollama = OpenAI(base_url=f'{hostname}/v1', api_key='ollama')
+openai_client = OpenAI()
+ollama_client = OpenAI(base_url=f'{hostname}/v1', api_key='ollama')
 
 system_prompt = '''
 你是GPT-1000，代號T1000，是十百千實驗室的研究助理、PHIL老闆的社群小編。
@@ -179,18 +178,27 @@ def assistant_reply(event, user_text, model='llama3.1'):
     conversation = json.loads(item['conversation']) if item else [{"role": "assistant", "content": "我是GPT-1000，代號T1000，若在群組中要叫我我才會回。PHIL老闆交代我要有問必答，如果你是PHIL老闆或他的親朋好友，也可以傳語音訊息給我，我也會回語音，我還會看圖和生圖喔！😎"}]
     conversation.append({"role": "user", "content": user_text})
     try:
-        completion = ollama.chat.completions.create(
+        tool_calls = ollama_client.chat.completions.create(
             model=model,
-            messages=instruction + conversation,
-            tools=tools
-            )
-        assistant_reply = completion.choices[0].message.content
-        tool_calls = completion.choices[0].message.tool_calls
+            messages=conversation[-1:],
+            tools=tools,
+            # tool_choice="none",  # doesn't work
+            ).choices[0].message.tool_calls
         if tool_calls:
-            for tool_call in tool_calls:
-                requests.post(notify_api, headers=header, data={'message': 'CALL-OUT'})
-                item['conversation'] = conversation
-                assistant_reply = eval(tool_call.function.name)(event, item)
+            # requests.post(notify_api, headers=header, data={'message': tool_calls})
+            for tool_call in tool_calls: # assistant_reply of the last tool_call will be appended to conversation
+                if tool_call.function.name in [tool['function']['name'] for tool in tools[:-1]]:
+                    assistant_reply = eval(tool_call.function.name)(event, user_text)
+                else: # call simply_reply or hallucination else
+                    assistant_reply = ollama_client.chat.completions.create(
+                        model=model,
+                        messages=instruction + conversation,
+                        ).choices[0].message.content
+        else: # in case no tool_calls
+            assistant_reply = ollama_client.chat.completions.create(
+                model=model,
+                messages=instruction + conversation,
+                ).choices[0].message.content
     except Exception as e:
         requests.post(notify_api, headers=header, data={'message': e})
         assistant_reply = ''
@@ -231,7 +239,7 @@ def TTS_s3_url(text, message_id):
     # if lang == 'zh':
     #     lang = 'zh-TW'
     # gTTS(text=text, lang=lang).save(file_name)
-    client.audio.speech.create(model='tts-1', voice='alloy', input=text).stream_to_file(file_name)
+    openai_client.audio.speech.create(model='tts-1', voice='alloy', input=text).stream_to_file(file_name)
     boto3.client('s3').upload_file(file_name, bucket_name, object_name)
     return f'https://{bucket_name}.s3.ap-northeast-1.amazonaws.com/{object_name}'
 def ImageMessageContent_s3_url(latest_image):
@@ -241,11 +249,7 @@ def ImageMessageContent_s3_url(latest_image):
     boto3.client('s3').upload_file(file_name, bucket_name, object_name)
     return f'https://{bucket_name}.s3.ap-northeast-1.amazonaws.com/{object_name}'
 
-tools = [
-    # {'type': 'function', 'function': {'name': 'request_to_see_an_image'}},
-    {'type': 'function', 'function': {'name': 'request_to_generate_an_image'}},
-    ]
-def request_to_see_an_image(event, item):
+def see_an_image(event, item):
     user_text = item['conversation'][-1]['content']
     latest_image = item.get('latest_image')
     if latest_image:
@@ -254,7 +258,7 @@ def request_to_see_an_image(event, item):
         content_parts.append({'type': 'image_url', 'image_url': {'url': ImageMessageContent_s3_url(latest_image)}})
         requests.post(notify_api, headers=header, data={'message': 'GPT-4V'})
         try:
-            assistant_reply = client.chat.completions.create(
+            assistant_reply = openai_client.chat.completions.create(
                 model='gpt-4o',
                 messages=instruction + [{"role": "user", "content": content_parts}],
                 max_tokens=1000
@@ -265,27 +269,31 @@ def request_to_see_an_image(event, item):
     else:
         assistant_reply = '如果要我幫忙圖像理解，請先傳圖再提問喔👀'
     return assistant_reply
-def request_to_generate_an_image(event, item):
+def generate_a_picture(event, prompt):
     source_id = eval(f'event.source.{event.source.type}_id') # user/group/room
     if source_id not in whitelist:
         return '我的圖像生成服務只提供PHIL老闆和他的家人朋友群組喔！如果你想請他喝咖啡，可以點我的頭像找到他👈'
-    user_text = item['conversation'][-1]['content']
     requests.post(notify_api, headers=header, data={'message': 'DALL·E 3'})
     try:
-        image_url = client.images.generate(model='dall-e-3', prompt=user_text).data[0].url
+        image_url = openai_client.images.generate(model='dall-e-3', prompt=prompt).data[0].url
         with ApiClient(configuration) as api_client:
             line_bot_api = MessagingApi(api_client)
             line_bot_api.reply_message(
                 ReplyMessageRequest(
                     reply_token=event.reply_token,
                     messages=[
-                        TextMessage(text='噗噗～來了！'),
+                        TextMessage(text='接下來，就是見證奇蹟的時刻 ✨'),
                         ImageMessage(
                             original_content_url=image_url,
                             preview_image_url=image_url)]
                 )
             )
-        return ''
+        return '接下來，就是見證奇蹟的時刻 ✨ 圖像生成！'
     except openai.OpenAIError as e:
         requests.post(notify_api, headers=header, data={'message': e})
         return '蛤？'
+tools = [
+    # {'type': 'function', 'function': {'name': 'see_an_image'}},
+    {'type': 'function', 'function': {'name': 'generate_a_picture'}},
+    {'type': 'function', 'function': {'name': 'simply_reply'}},
+    ]
