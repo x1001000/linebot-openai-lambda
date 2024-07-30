@@ -270,8 +270,7 @@ def see_an_image(event, item):
         assistant_reply = '如果要我幫忙圖像理解，請先傳圖再提問喔👀'
     return assistant_reply
 def generate_a_picture(event, prompt):
-    source_id = eval(f'event.source.{event.source.type}_id') # user/group/room
-    if source_id not in whitelist:
+    if event.source.user_id not in whitelist and eval(f'event.source.{event.source.type}_id') not in whitelist:
         return '我的圖像生成服務只提供PHIL老闆和他的家人朋友群組喔！如果你想請他喝咖啡，可以點我的頭像找到他👈'
     requests.post(notify_api, headers=header, data={'message': 'DALL·E 3'})
     try:
