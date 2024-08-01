@@ -144,17 +144,6 @@ def handle_image_message(event):
 
 with open('whitelist.txt') as f:
     whitelist = [line.split()[0] for line in f]
-def terminator(event):
-    with ApiClient(configuration) as api_client:
-        line_bot_api = MessagingApi(api_client)
-        line_bot_api.reply_message(
-            ReplyMessageRequest(
-                reply_token=event.reply_token,
-                messages=[ImageMessage(
-                    original_content_url='https://raw.githubusercontent.com/x1001000/linebot-openai-lambda/main/hastalavista.jpeg',
-                    preview_image_url='https://raw.githubusercontent.com/x1001000/linebot-openai-lambda/main/hastalavista-580x326.jpeg')]
-            )
-        )
 
 
 import openai
@@ -271,10 +260,26 @@ def see_an_image(event, item):
     return assistant_reply
 def generate_a_picture(event, prompt):
     if event.source.user_id not in whitelist and eval(f'event.source.{event.source.type}_id') not in whitelist:
-        return '我的圖像生成服務只提供PHIL老闆和他的家人朋友群組喔！如果你想請他喝咖啡，可以點我的頭像找到他👈'
+        with ApiClient(configuration) as api_client:
+            line_bot_api = MessagingApi(api_client)
+            line_bot_api.reply_message(
+                ReplyMessageRequest(
+                    reply_token=event.reply_token,
+                    messages=[
+                        TextMessage(text='抱歉，因為你不在PHIL老闆設定的白名單上，所以我只能送你一張我T1000的自畫像，不客氣！👻'),
+                        ImageMessage(
+                            original_content_url='https://x1001000-public.s3.ap-northeast-1.amazonaws.com/T1000.jpg',
+                            preview_image_url='https://x1001000-public.s3.ap-northeast-1.amazonaws.com/T1000-removebg-preview.png')]
+                )
+            )
+        return '抱歉，因為你不在PHIL老闆設定的白名單上，所以我只能送你一張我T1000的自畫像，不客氣！👻'
     requests.post(notify_api, headers=header, data={'message': 'DALL·E 3'})
     try:
         image_url = openai_client.images.generate(model='dall-e-3', prompt=prompt).data[0].url
+    except openai.OpenAIError as e:
+        requests.post(notify_api, headers=header, data={'message': e})
+        return '蛤？'
+    finally:
         with ApiClient(configuration) as api_client:
             line_bot_api = MessagingApi(api_client)
             line_bot_api.reply_message(
@@ -288,9 +293,6 @@ def generate_a_picture(event, prompt):
                 )
             )
         return '接下來，就是見證奇蹟的時刻 ✨ 圖像生成！'
-    except openai.OpenAIError as e:
-        requests.post(notify_api, headers=header, data={'message': e})
-        return '蛤？'
 tools = [
     # {'type': 'function', 'function': {'name': 'see_an_image'}},
     {'type': 'function', 'function': {'name': 'generate_a_picture'}},
