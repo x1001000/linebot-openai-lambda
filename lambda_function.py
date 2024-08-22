@@ -61,6 +61,7 @@ def handle_text_message(event):
     if event.source.type != 'user':
         if not re.search('[Tt]-?1000', event.message.text):
             return
+    user_text = re.sub('[Tt]-?1000', '', event.message.text)
     with ApiClient(configuration) as api_client:
         line_bot_api = MessagingApi(api_client)
         line_bot_api.show_loading_animation(
@@ -72,7 +73,7 @@ def handle_text_message(event):
         line_bot_api.reply_message(
             ReplyMessageRequest(
                 reply_token=event.reply_token,
-                messages=[TextMessage(text=assistant_reply(event, event.message.text))]
+                messages=[TextMessage(text=assistant_reply(event, user_text))]
             )
         )
 @handler.add(MessageEvent, message=StickerMessageContent)
@@ -300,7 +301,7 @@ def generate_a_picture(event, prompt):
 def generate_a_picture(event, prompt):
     english_prompt = ollama_client.chat.completions.create(
         model=model,
-        messages=[{"role": "user", "content": f'翻譯成英文：\n\n{prompt}'}],
+        messages=[{"role": "user", "content": f'Please reply ONLY English translation of text below\n----\n{prompt}'}],
         ).choices[0].message.content
     payload = {'inputs': english_prompt}
     requests.post(notify_api, headers=notify_header, data={'message': english_prompt})
