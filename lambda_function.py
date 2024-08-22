@@ -1,32 +1,35 @@
 import os
 notify_access_token = os.getenv('LINE_NOTIFY_ACCESS_TOKEN')
+notify_header = {'Authorization': f'Bearer {notify_access_token}'}
+notify_api = 'https://notify-api.line.me/api/notify'
 channel_access_token = os.getenv('LINE_CHANNEL_ACCESS_TOKEN')
 channel_secret = os.getenv('LINE_CHANNEL_SECRET')
 hostname = os.getenv('OLLAMA_HOSTNAME')
+inference_access_token = os.getenv('HF_INFERENCE_ACCESS_TOKEN')
+inference_header = {'Authorization': f'Bearer {inference_access_token}'}
+inference_api = 'https://api-inference.huggingface.co/models/black-forest-labs/FLUX.1-schnell'
 
 import requests
-notify_api = 'https://notify-api.line.me/api/notify'
-header = {'Authorization': f'Bearer {notify_access_token}'}
-requests.post(notify_api, headers=header, data={'message': 'lambda_function.py'})
+requests.post(notify_api, headers=notify_header, data={'message': 'lambda_function.py'})
 def debug_mode(request_body):
     # # https://developers.line.biz/en/reference/messaging-api/#request-body
     # destination = request_body['destination']
-    # requests.post(notify_api, headers=header, data={'message': destination})
+    # requests.post(notify_api, headers=notify_header, data={'message': destination})
     events = request_body['events']
     if events == []:
-        requests.post(notify_api, headers=header, data={'message': 'Webhook URL Verify Success'})
+        requests.post(notify_api, headers=notify_header, data={'message': 'Webhook URL Verify Success'})
     elif events[0]['type'] == 'follow':
-        requests.post(notify_api, headers=header, data={'message': f"followed by {events[0]['source']['type']}Id\n" + events[0]['source'][f"{events[0]['source']['type']}Id"]})
+        requests.post(notify_api, headers=notify_header, data={'message': f"followed by {events[0]['source']['type']}Id\n" + events[0]['source'][f"{events[0]['source']['type']}Id"]})
     elif events[0]['type'] == 'unfollow':
-        requests.post(notify_api, headers=header, data={'message': f"unfollowed by {events[0]['source']['type']}Id\n" + events[0]['source'][f"{events[0]['source']['type']}Id"]})
+        requests.post(notify_api, headers=notify_header, data={'message': f"unfollowed by {events[0]['source']['type']}Id\n" + events[0]['source'][f"{events[0]['source']['type']}Id"]})
     elif events[0]['type'] == 'message':
-        requests.post(notify_api, headers=header, data={'message': f"{events[0]['message']['type']} from {events[0]['source']['type']}Id\n" + events[0]['source'][f"{events[0]['source']['type']}Id"]})
+        requests.post(notify_api, headers=notify_header, data={'message': f"{events[0]['message']['type']} from {events[0]['source']['type']}Id\n" + events[0]['source'][f"{events[0]['source']['type']}Id"]})
     else:
-        requests.post(notify_api, headers=header, data={'message': f"{events[0]['type']}"})
+        requests.post(notify_api, headers=notify_header, data={'message': f"{events[0]['type']}"})
 def god_mode(Q, A):
     Q = f'\n🤔：{Q}'
     A = f'\n🤖：{A}'
-    requests.post(notify_api, headers=header, data={'message': Q+A})
+    requests.post(notify_api, headers=notify_header, data={'message': Q+A})
 
 import re
 import base64
@@ -134,7 +137,7 @@ def handle_image_message(event):
         assistant_reply = requests.post(f'{hostname}/api/generate', data=json.dumps(payload)).json()['response']
         assistant_reply += '\n\n關於這個圖像內容，歡迎你稍後再次提問。'
     except Exception as e:
-        requests.post(notify_api, headers=header, data={'message': e})
+        requests.post(notify_api, headers=notify_header, data={'message': e})
         assistant_reply = ''
     finally:
         conversation.append({"role": "assistant", "content": assistant_reply})
@@ -150,6 +153,7 @@ import openai
 from openai import OpenAI
 openai_client = OpenAI()
 ollama_client = OpenAI(base_url=f'{hostname}/v1', api_key='ollama')
+model = 'llama3.1'
 
 system_prompt = '''
 你是GPT-1000，代號T1000，是十百千實驗室的研究助理、PHIL老闆的社群小編。
@@ -161,7 +165,7 @@ youtube.com/@PHILALIVE
 你的任務是推廣PHIL老闆的社群，邀請訪客幫忙按讚、留言、分享。
 '''
 instruction = [{"role": "system", "content": system_prompt}]
-def assistant_reply(event, user_text, model='llama3.1'):
+def assistant_reply(event, user_text, model=model):
     source_id = eval(f'event.source.{event.source.type}_id') # user/group/room
     item = threads.get_item(Key={'id': source_id}).get('Item', {})
     conversation = json.loads(item['conversation']) if item else [{"role": "assistant", "content": "我是GPT-1000，代號T1000，若在群組中要叫我我才會回。PHIL老闆交代我要有問必答，如果你是PHIL老闆或他的親朋好友，也可以傳語音訊息給我，我也會回語音，我還會看圖和生圖喔！😎"}]
@@ -174,7 +178,7 @@ def assistant_reply(event, user_text, model='llama3.1'):
             # tool_choice="none",  # doesn't work
             ).choices[0].message.tool_calls
         if tool_calls:
-            # requests.post(notify_api, headers=header, data={'message': tool_calls})
+            # requests.post(notify_api, headers=notify_header, data={'message': tool_calls})
             for tool_call in tool_calls: # assistant_reply of the last tool_call will be appended to conversation
                 if tool_call.function.name in [tool['function']['name'] for tool in tools[:-1]]:
                     assistant_reply = eval(tool_call.function.name)(event, user_text)
@@ -189,7 +193,7 @@ def assistant_reply(event, user_text, model='llama3.1'):
                 messages=instruction + conversation,
                 ).choices[0].message.content
     except Exception as e:
-        requests.post(notify_api, headers=header, data={'message': e})
+        requests.post(notify_api, headers=notify_header, data={'message': e})
         assistant_reply = ''
     finally:
         conversation.append({"role": "assistant", "content": assistant_reply})
@@ -202,7 +206,7 @@ def assistant_reply(event, user_text, model='llama3.1'):
 import json
 
 def lambda_handler(event, context):
-    # requests.post(notify_api, headers=header, data={'message': 'lambda_handler()'})
+    # requests.post(notify_api, headers=notify_header, data={'message': 'lambda_handler()'})
     body = event['body']
     signature = event['headers']['x-line-signature']
     # debug_mode(json.loads(body))
@@ -224,7 +228,7 @@ def TTS_s3_url(text, message_id):
     #     model="gpt-3.5-turbo",
     #     messages=[{"role": "user", "content": f'Return the 2-letter language code for "{text}". ONLY the code and nothing else.'}]
     #     ).choices[0].message.content
-    # requests.post(notify_api, headers=header, data={'message': lang})
+    # requests.post(notify_api, headers=notify_header, data={'message': lang})
     # if lang == 'zh':
     #     lang = 'zh-TW'
     # gTTS(text=text, lang=lang).save(file_name)
@@ -245,7 +249,7 @@ def see_an_image(event, item):
         content_parts = []
         content_parts.append({'type': 'text', 'text': user_text})
         content_parts.append({'type': 'image_url', 'image_url': {'url': ImageMessageContent_s3_url(latest_image)}})
-        requests.post(notify_api, headers=header, data={'message': 'GPT-4V'})
+        requests.post(notify_api, headers=notify_header, data={'message': 'GPT-4V'})
         try:
             assistant_reply = openai_client.chat.completions.create(
                 model='gpt-4o',
@@ -253,7 +257,7 @@ def see_an_image(event, item):
                 max_tokens=1000
                 ).choices[0].message.content
         except openai.BadRequestError as e:
-            requests.post(notify_api, headers=header, data={'message': e})
+            requests.post(notify_api, headers=notify_header, data={'message': e})
             assistant_reply = '不可以壞壞🙅'
     else:
         assistant_reply = '如果要我幫忙圖像理解，請先傳圖再提問喔👀'
@@ -273,12 +277,42 @@ def generate_a_picture(event, prompt):
                 )
             )
         return '抱歉，因為你不在PHIL老闆設定的白名單上，所以我只能送你一張我T1000的自畫像，不客氣！👻'
-    requests.post(notify_api, headers=header, data={'message': 'DALL·E 3'})
+    requests.post(notify_api, headers=notify_header, data={'message': 'DALL·E 3'})
     try:
         image_url = openai_client.images.generate(model='dall-e-3', prompt=prompt).data[0].url
     except openai.OpenAIError as e:
-        requests.post(notify_api, headers=header, data={'message': e})
+        requests.post(notify_api, headers=notify_header, data={'message': e})
         return '蛤？'
+    finally:
+        with ApiClient(configuration) as api_client:
+            line_bot_api = MessagingApi(api_client)
+            line_bot_api.reply_message(
+                ReplyMessageRequest(
+                    reply_token=event.reply_token,
+                    messages=[
+                        TextMessage(text='接下來，就是見證奇蹟的時刻 ✨'),
+                        ImageMessage(
+                            original_content_url=image_url,
+                            preview_image_url=image_url)]
+                )
+            )
+        return '接下來，就是見證奇蹟的時刻 ✨ 圖像生成！'
+def generate_a_picture(event, prompt):
+    english_prompt = ollama_client.chat.completions.create(
+        model=model,
+        messages=[{"role": "user", "content": f'翻譯成英文：\n\n{prompt}'}],
+        ).choices[0].message.content
+    payload = {'inputs': english_prompt}
+    requests.post(notify_api, headers=notify_header, data={'message': english_prompt})
+    requests.post(notify_api, headers=notify_header, data={'message': 'FLUX.1-schnell'})
+    try:
+        image_content = requests.post(inference_api, headers=inference_header, json=payload).content
+        with open(f'/tmp/{event.message.id}.jpg', 'wb') as tf:
+            tf.write(image_content)
+        image_url = ImageMessageContent_s3_url(f'/tmp/{event.message.id}.jpg')
+    except Exception as e:
+        requests.post(notify_api, headers=notify_header, data={'message': e})
+        assistant_reply = ''
     finally:
         with ApiClient(configuration) as api_client:
             line_bot_api = MessagingApi(api_client)
