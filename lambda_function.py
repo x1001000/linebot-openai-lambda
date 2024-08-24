@@ -198,7 +198,7 @@ def assistant_messages(event, user_text, model=model):
             requests.post(notify_api, headers=notify_header, data={'message': tool_calls})
             for tool_call in tool_calls:
                 if tool_call.function.name == 'generate_image':
-                    prompt = json.loads(tool_call.function.arguments)['prompt_in_English']
+                    prompt = json.loads(tool_call.function.arguments)['prompt_translated_into_English']
                     assistant_text = f'接下來，就是見證奇蹟的時刻✨{prompt}✨圖像生成！'
                     image_url = generate_image(event, prompt)
                     assistant_messages.append(ImageMessage(original_content_url=image_url, preview_image_url=image_url))
@@ -217,7 +217,7 @@ tools = [
     {
         'type': 'function',
         'function': {
-            'name': 'simply_reply'
+            'name': 'reply_text'
         }
     },
     {
@@ -228,9 +228,10 @@ tools = [
             'parameters': {
                 'type': 'object',
                 'properties': {
-                    'prompt_in_English': {'type': 'string'}
+                    'prompt_original': {'type': 'string'},
+                    'prompt_translated_into_English': {'type': 'string'},
                 },
-                'required': ['prompt_in_English']
+                'required': ['prompt_original', 'prompt_translated_into_English']
             }
         }
     },
