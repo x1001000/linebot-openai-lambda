@@ -139,12 +139,12 @@ def handle_image_message(event):
     with ApiClient(configuration) as api_client:
         line_bot_blob_api = MessagingApiBlob(api_client)
     message_content = line_bot_blob_api.get_message_content(message_id=message_id)
+    user_text = '請使用繁體中文描述圖像'
     payload = {
         'model': 'llava-llama3',
         'prompt': user_text,
         'images': [base64.b64encode(message_content).decode('utf-8')],
         'stream': False}
-    user_text = '請使用繁體中文描述圖像'
     source_id = eval(f'event.source.{event.source.type}_id') # user/group/room
     item = threads.get_item(Key={'id': source_id}).get('Item', {})
     conversation = json.loads(item['conversation']) if item else [{"role": "assistant", "content": "我是GPT-1000，代號T1000，若在群組中要叫我我才會回。PHIL老闆交代我要有問必答，如果你是PHIL老闆或他的親朋好友，也可以傳語音訊息給我，我也會回語音，我還會看圖和生圖喔！😎"}]
