@@ -9,6 +9,9 @@ inference_access_token = os.getenv('HF_INFERENCE_ACCESS_TOKEN')
 inference_header = {'Authorization': f'Bearer {inference_access_token}'}
 inference_api = 'https://api-inference.huggingface.co/models/black-forest-labs/FLUX.1-schnell'
 
+with open('whitelist.txt') as f:
+    whitelist = [line.split()[0] for line in f]
+
 import requests
 requests.post(notify_api, headers=notify_header, data={'message': 'lambda_function.py'})
 def debug_mode(request_body):
@@ -58,96 +61,105 @@ configuration = Configuration(access_token=channel_access_token)
 handler = WebhookHandler(channel_secret)
 @handler.add(MessageEvent, message=TextMessageContent)
 def handle_text_message(event):
+    user_text = event.message.text
     if event.source.type != 'user':
-        if not re.search('[Tt]-?1000', event.message.text):
+        if not re.search('[Tt]-?1000', user_text):
             return
-    user_text = re.sub('[Tt]-?1000', '', event.message.text)
     with ApiClient(configuration) as api_client:
         line_bot_api = MessagingApi(api_client)
-        line_bot_api.show_loading_animation(
-            ShowLoadingAnimationRequest(
-                chat_id=event.source.user_id,
-                # loading_seconds=5
-            )
+    line_bot_api.show_loading_animation(
+        ShowLoadingAnimationRequest(
+            chat_id=event.source.user_id,
+            # loading_seconds=5
         )
-        line_bot_api.reply_message(
-            ReplyMessageRequest(
-                reply_token=event.reply_token,
-                messages=[TextMessage(text=assistant_reply(event, user_text))]
-            )
+    )
+    line_bot_api.reply_message(
+        ReplyMessageRequest(
+            reply_token=event.reply_token,
+            messages=assistant_messages(event, user_text)
         )
+    )
 @handler.add(MessageEvent, message=StickerMessageContent)
 def handle_sticker_message(event):
     if event.source.type != 'user':
         return
     with ApiClient(configuration) as api_client:
         line_bot_api = MessagingApi(api_client)
-        line_bot_api.reply_message(
-            ReplyMessageRequest(
-                reply_token=event.reply_token,
-                messages=[TextMessage(text='$', emojis=[{'index': 0, 'productId': '5ac21c46040ab15980c9b442', 'emojiId': '138'}])]
-            )
+    line_bot_api.show_loading_animation(
+        ShowLoadingAnimationRequest(
+            chat_id=event.source.user_id,
+            # loading_seconds=5
         )
+    )
+    line_bot_api.reply_message(
+        ReplyMessageRequest(
+            reply_token=event.reply_token,
+            messages=[TextMessage(text='$', emojis=[{'index': 0, 'productId': '5ac21c46040ab15980c9b442', 'emojiId': '138'}])]
+        )
+    )
 @handler.add(MessageEvent, message=AudioMessageContent)
 def handle_audio_message(event):
+    message_id = event.message.id
     if event.source.user_id not in whitelist and eval(f'event.source.{event.source.type}_id') not in whitelist:
         return
     with ApiClient(configuration) as api_client:
         line_bot_blob_api = MessagingApiBlob(api_client)
-    message_content = line_bot_blob_api.get_message_content(message_id=event.message.id)
-    with open(f'/tmp/{event.message.id}.m4a', 'wb') as tf:
+    message_content = line_bot_blob_api.get_message_content(message_id=message_id)
+    with open(f'/tmp/{message_id}.m4a', 'wb') as tf:
         tf.write(message_content)
     transcript = openai_client.audio.transcriptions.create(
         model='whisper-1',
-        file=open(f'/tmp/{event.message.id}.m4a', 'rb'),
+        file=open(f'/tmp/{message_id}.m4a', 'rb'),
         response_format='text'
         ).strip()
-    reply_text = assistant_reply(event, transcript)
-    line_bot_api = MessagingApi(api_client)
+    messages = assistant_messages(event, transcript)
+    openai_client.audio.speech.create(model='tts-1', voice='onyx', input=messages[0].text).stream_to_file(f'/tmp/{message_id}.mp3')
+    with ApiClient(configuration) as api_client:
+        line_bot_api = MessagingApi(api_client)
+    line_bot_api.show_loading_animation(
+        ShowLoadingAnimationRequest(
+            chat_id=event.source.user_id,
+            # loading_seconds=5
+        )
+    )
     line_bot_api.reply_message(
         ReplyMessageRequest(
             reply_token=event.reply_token,
-            messages=[
-                TextMessage(text=reply_text),
+            messages=messages + [
                 AudioMessage(
-                    original_content_url=TTS_s3_url(reply_text, event.message.id),
+                    original_content_url=s3_url(f'/tmp/{message_id}.mp3'),
                     duration=60000)]
         )
     )
 @handler.add(MessageEvent, message=ImageMessageContent)
 def handle_image_message(event):
+    message_id = event.message.id
     if event.source.user_id not in whitelist and eval(f'event.source.{event.source.type}_id') not in whitelist:
         return
     with ApiClient(configuration) as api_client:
         line_bot_blob_api = MessagingApiBlob(api_client)
-    message_content = line_bot_blob_api.get_message_content(message_id=event.message.id)
-    with open(f'/tmp/{event.message.id}.jpg', 'wb') as tf:
-        tf.write(message_content)
-    user_text = '請使用繁體中文描述圖像'
-    source_id = eval(f'event.source.{event.source.type}_id') # user/group/room
-    item = threads.get_item(Key={'id': source_id}).get('Item', {})
-    conversation = json.loads(item['conversation']) if item else [{"role": "assistant", "content": "我是GPT-1000，代號T1000，若在群組中要叫我我才會回。PHIL老闆交代我要有問必答，如果你是PHIL老闆或他的親朋好友，也可以傳語音訊息給我，我也會回語音，我還會看圖和生圖喔！😎"}]
-    conversation.append({"role": "user", "content": user_text})
-    # item['latest_image'] = f'/tmp/{event.message.id}.jpg' # for GPT-4V
+    message_content = line_bot_blob_api.get_message_content(message_id=message_id)
     payload = {
         'model': 'llava-llama3',
         'prompt': user_text,
         'images': [base64.b64encode(message_content).decode('utf-8')],
         'stream': False}
+    user_text = '請使用繁體中文描述圖像'
+    source_id = eval(f'event.source.{event.source.type}_id') # user/group/room
+    item = threads.get_item(Key={'id': source_id}).get('Item', {})
+    conversation = json.loads(item['conversation']) if item else [{"role": "assistant", "content": "我是GPT-1000，代號T1000，若在群組中要叫我我才會回。PHIL老闆交代我要有問必答，如果你是PHIL老闆或他的親朋好友，也可以傳語音訊息給我，我也會回語音，我還會看圖和生圖喔！😎"}]
+    conversation.append({"role": "user", "content": user_text})
     try:
-        assistant_reply = requests.post(f'{hostname}/api/generate', data=json.dumps(payload)).json()['response']
-        assistant_reply += '\n\n關於這個圖像內容，歡迎你稍後再次提問。'
+        assistant_text = requests.post(f'{hostname}/api/generate', data=json.dumps(payload)).json()['response']
+        assistant_text += '\n\n關於這個圖像內容，歡迎你稍後再次提問。'
     except Exception as e:
         requests.post(notify_api, headers=notify_header, data={'message': e})
-        assistant_reply = ''
+        assistant_text = ''
     finally:
-        conversation.append({"role": "assistant", "content": assistant_reply})
+        conversation.append({"role": "assistant", "content": assistant_text})
         item['conversation'] = conversation[-10:]
         threads.put_item(Item={'id': source_id, 'conversation': json.dumps(item['conversation'])})
-        god_mode(Q=user_text, A=assistant_reply)
-
-with open('whitelist.txt') as f:
-    whitelist = [line.split()[0] for line in f]
+        god_mode(Q=user_text, A=assistant_text)
 
 
 import openai
@@ -166,42 +178,73 @@ youtube.com/@PHILALIVE
 你的任務是推廣PHIL老闆的社群，邀請訪客幫忙按讚、留言、分享。
 '''
 instruction = [{"role": "system", "content": system_prompt}]
-def assistant_reply(event, user_text, model=model):
+def assistant_messages(event, user_text, model=model):
+    assistant_messages = []
     source_id = eval(f'event.source.{event.source.type}_id') # user/group/room
     item = threads.get_item(Key={'id': source_id}).get('Item', {})
     conversation = json.loads(item['conversation']) if item else [{"role": "assistant", "content": "我是GPT-1000，代號T1000，若在群組中要叫我我才會回。PHIL老闆交代我要有問必答，如果你是PHIL老闆或他的親朋好友，也可以傳語音訊息給我，我也會回語音，我還會看圖和生圖喔！😎"}]
     conversation.append({"role": "user", "content": user_text})
     try:
+        assistant_text = ollama_client.chat.completions.create(
+            model=model,
+            messages=instruction + conversation,
+            ).choices[0].message.content
         tool_calls = ollama_client.chat.completions.create(
             model=model,
-            messages=conversation[-1:],
+            messages=instruction + conversation,
             tools=tools,
-            # tool_choice="none",  # doesn't work
             ).choices[0].message.tool_calls
         if tool_calls:
-            # requests.post(notify_api, headers=notify_header, data={'message': tool_calls})
-            for tool_call in tool_calls: # assistant_reply of the last tool_call will be appended to conversation
-                if tool_call.function.name in [tool['function']['name'] for tool in tools[:-1]]:
-                    assistant_reply = eval(tool_call.function.name)(event, user_text)
-                else: # call simply_reply or hallucination else
-                    assistant_reply = ollama_client.chat.completions.create(
-                        model=model,
-                        messages=instruction + conversation,
-                        ).choices[0].message.content
-        else: # in case no tool_calls
-            assistant_reply = ollama_client.chat.completions.create(
-                model=model,
-                messages=instruction + conversation,
-                ).choices[0].message.content
+            requests.post(notify_api, headers=notify_header, data={'message': tool_calls})
+            for tool_call in tool_calls:
+                if tool_call.function.name == 'generate_image':
+                    prompt = json.loads(tool_call.function.arguments)['prompt_in_English']
+                    assistant_text = f'接下來，就是見證奇蹟的時刻✨{prompt}✨圖像生成！'
+                    image_url = generate_image(event, prompt)
+                    assistant_messages.append(ImageMessage(original_content_url=image_url, preview_image_url=image_url))
+        assistant_messages.append(TextMessage(text=assistant_text))
+        return assistant_messages[::-1]
     except Exception as e:
         requests.post(notify_api, headers=notify_header, data={'message': e})
-        assistant_reply = ''
+        assistant_text = ''
     finally:
-        conversation.append({"role": "assistant", "content": assistant_reply})
+        conversation.append({"role": "assistant", "content": assistant_text})
         item['conversation'] = conversation[-10:]
         threads.put_item(Item={'id': source_id, 'conversation': json.dumps(item['conversation'])})
-        god_mode(Q=user_text, A=assistant_reply)
-        return assistant_reply
+        god_mode(Q=user_text, A=assistant_text)
+
+tools = [
+    {
+        'type': 'function',
+        'function': {
+            'name': 'simply_reply'
+        }
+    },
+    {
+        'type': 'function',
+        'function': {
+            'name': 'generate_image',
+            'description': 'Call this function when user wants some image',
+            'parameters': {
+                'type': 'object',
+                'properties': {
+                    'prompt_in_English': {'type': 'string'}
+                },
+                'required': ['prompt_in_English']
+            }
+        }
+    },
+]
+def generate_image(event, prompt):
+    message_id = event.message.id
+    requests.post(notify_api, headers=notify_header, data={'message': 'FLUX.1-schnell'})
+    try:
+        image_content = requests.post(inference_api, headers=inference_header, data={'inputs': prompt}).content
+        with open(f'/tmp/{message_id}.jpg', 'wb') as tf:
+            tf.write(image_content)
+        return s3_url(f'/tmp/{message_id}.jpg')
+    except Exception as e:
+        requests.post(notify_api, headers=notify_header, data={'message': e})
 
 
 import json
@@ -217,119 +260,10 @@ def lambda_handler(event, context):
         'body': json.dumps('Hello from Lambda!')
     }
 
-
-# from gtts import gTTS
 import boto3
 threads = boto3.resource('dynamodb').Table('threads')
-def TTS_s3_url(text, message_id):
-    file_name = f'/tmp/{message_id}.mp3'
-    object_name = f'GPT-1000/{message_id}.mp3'
+def s3_url(file_path):
+    object_path = f'GPT-1000/{file_path[5:]}'
     bucket_name = 'x1001000-public'
-    # lang = client.chat.completions.create(
-    #     model="gpt-3.5-turbo",
-    #     messages=[{"role": "user", "content": f'Return the 2-letter language code for "{text}". ONLY the code and nothing else.'}]
-    #     ).choices[0].message.content
-    # requests.post(notify_api, headers=notify_header, data={'message': lang})
-    # if lang == 'zh':
-    #     lang = 'zh-TW'
-    # gTTS(text=text, lang=lang).save(file_name)
-    openai_client.audio.speech.create(model='tts-1', voice='alloy', input=text).stream_to_file(file_name)
-    boto3.client('s3').upload_file(file_name, bucket_name, object_name)
-    return f'https://{bucket_name}.s3.ap-northeast-1.amazonaws.com/{object_name}'
-def ImageMessageContent_s3_url(latest_image):
-    file_name = latest_image
-    object_name = f'GPT-1000/{latest_image[5:]}'
-    bucket_name = 'x1001000-public'
-    boto3.client('s3').upload_file(file_name, bucket_name, object_name)
-    return f'https://{bucket_name}.s3.ap-northeast-1.amazonaws.com/{object_name}'
-
-def see_an_image(event, item):
-    user_text = item['conversation'][-1]['content']
-    latest_image = item.get('latest_image')
-    if latest_image:
-        content_parts = []
-        content_parts.append({'type': 'text', 'text': user_text})
-        content_parts.append({'type': 'image_url', 'image_url': {'url': ImageMessageContent_s3_url(latest_image)}})
-        requests.post(notify_api, headers=notify_header, data={'message': 'GPT-4V'})
-        try:
-            assistant_reply = openai_client.chat.completions.create(
-                model='gpt-4o',
-                messages=instruction + [{"role": "user", "content": content_parts}],
-                max_tokens=1000
-                ).choices[0].message.content
-        except openai.BadRequestError as e:
-            requests.post(notify_api, headers=notify_header, data={'message': e})
-            assistant_reply = '不可以壞壞🙅'
-    else:
-        assistant_reply = '如果要我幫忙圖像理解，請先傳圖再提問喔👀'
-    return assistant_reply
-def generate_a_picture(event, prompt):
-    if event.source.user_id not in whitelist and eval(f'event.source.{event.source.type}_id') not in whitelist:
-        with ApiClient(configuration) as api_client:
-            line_bot_api = MessagingApi(api_client)
-            line_bot_api.reply_message(
-                ReplyMessageRequest(
-                    reply_token=event.reply_token,
-                    messages=[
-                        TextMessage(text='抱歉，因為你不在PHIL老闆設定的白名單上，所以我只能送你一張我T1000的自畫像，不客氣！👻'),
-                        ImageMessage(
-                            original_content_url='https://x1001000-public.s3.ap-northeast-1.amazonaws.com/T1000.jpg',
-                            preview_image_url='https://x1001000-public.s3.ap-northeast-1.amazonaws.com/T1000-removebg-preview.png')]
-                )
-            )
-        return '抱歉，因為你不在PHIL老闆設定的白名單上，所以我只能送你一張我T1000的自畫像，不客氣！👻'
-    requests.post(notify_api, headers=notify_header, data={'message': 'DALL·E 3'})
-    try:
-        image_url = openai_client.images.generate(model='dall-e-3', prompt=prompt).data[0].url
-    except openai.OpenAIError as e:
-        requests.post(notify_api, headers=notify_header, data={'message': e})
-        return '蛤？'
-    finally:
-        with ApiClient(configuration) as api_client:
-            line_bot_api = MessagingApi(api_client)
-            line_bot_api.reply_message(
-                ReplyMessageRequest(
-                    reply_token=event.reply_token,
-                    messages=[
-                        TextMessage(text='接下來，就是見證奇蹟的時刻 ✨'),
-                        ImageMessage(
-                            original_content_url=image_url,
-                            preview_image_url=image_url)]
-                )
-            )
-        return '接下來，就是見證奇蹟的時刻 ✨ 圖像生成！'
-def generate_a_picture(event, prompt):
-    english_prompt = ollama_client.chat.completions.create(
-        model=model,
-        messages=[{"role": "user", "content": f'Please reply ONLY English translation of text below\n----\n{prompt}'}],
-        ).choices[0].message.content
-    payload = {'inputs': english_prompt}
-    requests.post(notify_api, headers=notify_header, data={'message': english_prompt})
-    requests.post(notify_api, headers=notify_header, data={'message': 'FLUX.1-schnell'})
-    try:
-        image_content = requests.post(inference_api, headers=inference_header, json=payload).content
-        with open(f'/tmp/{event.message.id}.jpg', 'wb') as tf:
-            tf.write(image_content)
-        image_url = ImageMessageContent_s3_url(f'/tmp/{event.message.id}.jpg')
-    except Exception as e:
-        requests.post(notify_api, headers=notify_header, data={'message': e})
-        assistant_reply = ''
-    finally:
-        with ApiClient(configuration) as api_client:
-            line_bot_api = MessagingApi(api_client)
-            line_bot_api.reply_message(
-                ReplyMessageRequest(
-                    reply_token=event.reply_token,
-                    messages=[
-                        TextMessage(text='接下來，就是見證奇蹟的時刻 ✨'),
-                        ImageMessage(
-                            original_content_url=image_url,
-                            preview_image_url=image_url)]
-                )
-            )
-        return '接下來，就是見證奇蹟的時刻 ✨ 圖像生成！'
-tools = [
-    # {'type': 'function', 'function': {'name': 'see_an_image'}},
-    {'type': 'function', 'function': {'name': 'generate_a_picture'}},
-    {'type': 'function', 'function': {'name': 'simply_reply'}},
-    ]
+    boto3.client('s3').upload_file(file_path, bucket_name, object_path)
+    return f'https://{bucket_name}.s3.ap-northeast-1.amazonaws.com/{object_path}'
