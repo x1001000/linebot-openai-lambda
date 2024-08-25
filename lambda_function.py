@@ -189,9 +189,10 @@ def assistant_messages(event, user_text, model=model):
             model=model,
             messages=instruction + conversation,
             ).choices[0].message.content
+        assistant_messages.append(TextMessage(text=assistant_text))
         tool_calls = ollama_client.chat.completions.create(
             model=model,
-            messages=instruction + conversation,
+            messages=conversation[-1:],
             tools=tools,
             ).choices[0].message.tool_calls
         if tool_calls:
@@ -199,11 +200,9 @@ def assistant_messages(event, user_text, model=model):
             for tool_call in tool_calls:
                 if tool_call.function.name == 'generate_image':
                     prompt = json.loads(tool_call.function.arguments)['prompt_translated_into_English']
-                    assistant_text = f'接下來，就是見證奇蹟的時刻✨{prompt}✨圖像生成！'
                     image_url = generate_image(event, prompt)
                     assistant_messages.append(ImageMessage(original_content_url=image_url, preview_image_url=image_url))
-        assistant_messages.append(TextMessage(text=assistant_text))
-        return assistant_messages[::-1]
+        return assistant_messages
     except Exception as e:
         requests.post(notify_api, headers=notify_header, data={'message': e})
         assistant_text = ''
@@ -224,14 +223,14 @@ tools = [
         'type': 'function',
         'function': {
             'name': 'generate_image',
-            'description': 'Call this function when user wants some image',
+            'description': 'Call this function when user prompts you for some image',
             'parameters': {
                 'type': 'object',
                 'properties': {
-                    'prompt_original': {'type': 'string'},
+                    'prompt_in_original_language': {'type': 'string'},
                     'prompt_translated_into_English': {'type': 'string'},
                 },
-                'required': ['prompt_original', 'prompt_translated_into_English']
+                'required': ['prompt_in_original_language', 'prompt_translated_into_English']
             }
         }
     },
