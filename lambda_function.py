@@ -179,7 +179,6 @@ youtube.com/@PHILALIVE
 '''
 instruction = [{"role": "system", "content": system_prompt}]
 def assistant_messages(event, user_text, model=model):
-    assistant_messages = []
     source_id = eval(f'event.source.{event.source.type}_id') # user/group/room
     item = threads.get_item(Key={'id': source_id}).get('Item', {})
     conversation = json.loads(item['conversation']) if item else [{"role": "assistant", "content": "我是GPT-1000，代號T1000，若在群組中要叫我我才會回。PHIL老闆交代我要有問必答，如果你是PHIL老闆或他的親朋好友，也可以傳語音訊息給我，我也會回語音，我還會看圖和生圖喔！😎"}]
@@ -189,10 +188,10 @@ def assistant_messages(event, user_text, model=model):
             model=model,
             messages=instruction + conversation,
             ).choices[0].message.content
-        assistant_messages.append(TextMessage(text=assistant_text))
+        assistant_messages = [TextMessage(text=assistant_text)]
         tool_calls = ollama_client.chat.completions.create(
             model=model,
-            messages=conversation[-1:],
+            messages=conversation[-2:],
             tools=tools,
             ).choices[0].message.tool_calls
         if tool_calls:
@@ -201,8 +200,8 @@ def assistant_messages(event, user_text, model=model):
                 if tool_call.function.name == 'generate_image':
                     prompt = json.loads(tool_call.function.arguments)['prompt_translated_into_English']
                     image_url = generate_image(event, prompt)
-                    assistant_messages.append(ImageMessage(original_content_url=image_url, preview_image_url=image_url))
-        return assistant_messages
+                    assistant_messages = [ImageMessage(original_content_url=image_url, preview_image_url=image_url)]
+                    assistant_text = '✨'
     except Exception as e:
         requests.post(notify_api, headers=notify_header, data={'message': e})
         assistant_text = ''
@@ -211,6 +210,7 @@ def assistant_messages(event, user_text, model=model):
         item['conversation'] = conversation[-10:]
         threads.put_item(Item={'id': source_id, 'conversation': json.dumps(item['conversation'])})
         god_mode(Q=user_text, A=assistant_text)
+        return assistant_messages
 
 tools = [
     {
