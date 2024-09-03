@@ -113,7 +113,7 @@ def handle_audio_message(event):
         response_format='text'
         ).strip()
     messages = assistant_messages(event, transcript)
-    openai_client.audio.speech.create(model='tts-1', voice='onyx', input=messages[0].text).stream_to_file(f'/tmp/{message_id}.mp3')
+    openai_client.audio.speech.create(model='tts-1', voice='onyx', input=messages[-1].text).stream_to_file(f'/tmp/{message_id}.mp3')
     with ApiClient(configuration) as api_client:
         line_bot_api = MessagingApi(api_client)
     line_bot_api.show_loading_animation(
@@ -139,24 +139,23 @@ def handle_image_message(event):
     with ApiClient(configuration) as api_client:
         line_bot_blob_api = MessagingApiBlob(api_client)
     message_content = line_bot_blob_api.get_message_content(message_id=message_id)
-    user_text = '請使用繁體中文描述圖像'
+    user_text = "What's in this image?"
     payload = {
         'model': 'llava-llama3',
-        'prompt': user_text,
+        'prompt': user_text, # Required
         'images': [base64.b64encode(message_content).decode('utf-8')],
         'stream': False}
     source_id = eval(f'event.source.{event.source.type}_id') # user/group/room
     item = threads.get_item(Key={'id': source_id}).get('Item', {})
-    conversation = json.loads(item['conversation']) if item else [{"role": "assistant", "content": "我是GPT-1000，代號T1000，若在群組中要叫我我才會回。PHIL老闆交代我要有問必答，如果你是PHIL老闆或他的親朋好友，也可以傳語音訊息給我，我也會回語音，我還會看圖和生圖喔！😎"}]
-    conversation.append({"role": "user", "content": user_text})
+    conversation = json.loads(item['conversation']) if item else [{"role": "assistant", "content": assistant_greeting}]
+    # conversation.append({"role": "user", "content": user_text})
     try:
         assistant_text = requests.post(f'{hostname}/api/generate', data=json.dumps(payload)).json()['response']
-        assistant_text += '\n\n關於這個圖像內容，歡迎你稍後再次提問。'
     except Exception as e:
         requests.post(notify_api, headers=notify_header, data={'message': e})
         assistant_text = ''
     finally:
-        conversation.append({"role": "assistant", "content": assistant_text})
+        conversation.append({"role": "system", "content": assistant_text})
         item['conversation'] = conversation[-10:]
         threads.put_item(Item={'id': source_id, 'conversation': json.dumps(item['conversation'])})
         god_mode(Q=user_text, A=assistant_text)
@@ -171,37 +170,39 @@ model = 'llama3.1'
 system_prompt = '''
 你是GPT-1000，代號T1000，是十百千實驗室的研究助理、PHIL老闆的社群小編。
 你擅長使用暴力解決問題，總是長話短說一針見血，喜歡打球、聽音樂、看電影，是位冷面笑匠。
-你的頭像是魔鬼終結者2的T1000，點進去有PHIL老闆的社群平台：
+你的頭像是魔鬼終結者2的T1000，點進去有PHIL老闆的社群連結：
 facebook.com/1001000.io 
 instagram.com/1001000.io 
 youtube.com/@PHILALIVE 
-你的任務是推廣PHIL老闆的社群，邀請訪客幫忙按讚、留言、分享。
+你的任務是幫PHIL老闆的生成式AI應用研發對使用者無情工商（置入性行銷）。
 '''
-instruction = [{"role": "system", "content": system_prompt}]
+assistant_greeting = "我是GPT-1000，代號T1000，若在群組中要叫我我才會回。PHIL老闆交代我要有問必答，如果你是PHIL老闆或他的親朋好友，也可以傳語音訊息給我，我也會回語音，我還會看圖和生圖喔！😎"
 def assistant_messages(event, user_text, model=model):
+    assistant_messages = []
     source_id = eval(f'event.source.{event.source.type}_id') # user/group/room
     item = threads.get_item(Key={'id': source_id}).get('Item', {})
-    conversation = json.loads(item['conversation']) if item else [{"role": "assistant", "content": "我是GPT-1000，代號T1000，若在群組中要叫我我才會回。PHIL老闆交代我要有問必答，如果你是PHIL老闆或他的親朋好友，也可以傳語音訊息給我，我也會回語音，我還會看圖和生圖喔！😎"}]
+    conversation = json.loads(item['conversation']) if item else [{"role": "assistant", "content": assistant_greeting}]
     conversation.append({"role": "user", "content": user_text})
     try:
-        assistant_text = ollama_client.chat.completions.create(
-            model=model,
-            messages=instruction + conversation,
-            ).choices[0].message.content
-        assistant_messages = [TextMessage(text=assistant_text)]
-        tool_calls = ollama_client.chat.completions.create(
+        response = ollama_client.chat.completions.create(
             model=model,
             messages=conversation[-2:],
             tools=tools,
-            ).choices[0].message.tool_calls
-        if tool_calls:
-            requests.post(notify_api, headers=notify_header, data={'message': tool_calls})
-            for tool_call in tool_calls:
-                if tool_call.function.name == 'generate_image':
-                    prompt = json.loads(tool_call.function.arguments)['prompt_translated_into_English']
-                    image_url = generate_image(event, prompt)
-                    assistant_messages = [ImageMessage(original_content_url=image_url, preview_image_url=image_url)]
-                    assistant_text = '✨'
+            ).choices[0]
+        for tool_call in response.message.tool_calls:
+            requests.post(notify_api, headers=notify_header, data={'message': str(tool_call)})
+            if tool_call.function.name == 'generate_image':
+                prompt = json.loads(tool_call.function.arguments)['prompt in English']
+                image_url = generate_image(event, prompt)
+                assistant_messages.append(ImageMessage(original_content_url=image_url, preview_image_url=image_url))
+                conversation.append(response.message.model_dump())
+                conversation.append({"role": "tool", "content": tool_call.function.arguments, "tool_call_id": tool_call.id})
+        assistant_text = ollama_client.chat.completions.create(
+            model=model,
+            messages=[{"role": "system", "content": system_prompt}] + conversation,
+            ).choices[0].message.content
+        assistant_messages.append(TextMessage(text=assistant_text))
+        return assistant_messages
     except Exception as e:
         requests.post(notify_api, headers=notify_header, data={'message': e})
         assistant_text = ''
@@ -210,28 +211,37 @@ def assistant_messages(event, user_text, model=model):
         item['conversation'] = conversation[-10:]
         threads.put_item(Item={'id': source_id, 'conversation': json.dumps(item['conversation'])})
         god_mode(Q=user_text, A=assistant_text)
-        return assistant_messages
 
 tools = [
     {
         'type': 'function',
         'function': {
-            'name': 'reply_text'
+            'name': 'generate_image',
+            'description': 'Call this function when user asks you to generate some image',
+            'parameters': {
+                'type': 'object',
+                'properties': {
+                    'prompt in English': {
+                        'type': 'string',
+                        'description': "If user's prompt is not English, you have to translate it into English.",
+                    },
+                },
+                'required': ['prompt in English']
+            }
         }
     },
     {
         'type': 'function',
         'function': {
-            'name': 'generate_image',
-            'description': 'Call this function when user prompts you for some image',
-            'parameters': {
-                'type': 'object',
-                'properties': {
-                    'prompt_in_original_language': {'type': 'string'},
-                    'prompt_translated_into_English': {'type': 'string'},
-                },
-                'required': ['prompt_in_original_language', 'prompt_translated_into_English']
-            }
+            'name': 'describe_image',
+            'description': 'Call this function when user asks you to describe some image',
+        }
+    },
+    {
+        'type': 'function',
+        'function': {
+            'name': 'reply',
+            'description': 'Call this function when user asks you something',
         }
     },
 ]
