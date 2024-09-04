@@ -189,14 +189,16 @@ def assistant_messages(event, user_text, model=model):
             messages=conversation[-2:],
             tools=tools,
             ).choices[0]
-        for tool_call in response.message.tool_calls:
-            requests.post(notify_api, headers=notify_header, data={'message': str(tool_call)})
-            if tool_call.function.name == 'generate_image':
-                prompt = json.loads(tool_call.function.arguments)['prompt in English']
-                image_url = generate_image(event, prompt)
-                assistant_messages.append(ImageMessage(original_content_url=image_url, preview_image_url=image_url))
-                conversation.append(response.message.model_dump())
-                conversation.append({"role": "tool", "content": tool_call.function.arguments, "tool_call_id": tool_call.id})
+        tool_calls = response.message.tool_calls
+        if tool_calls: # prevent None from for-loop
+            for tool_call in tool_calls:
+                requests.post(notify_api, headers=notify_header, data={'message': str(tool_call)})
+                if tool_call.function.name == 'generate_image':
+                    prompt = json.loads(tool_call.function.arguments)['prompt in English']
+                    image_url = generate_image(event, prompt)
+                    assistant_messages.append(ImageMessage(original_content_url=image_url, preview_image_url=image_url))
+                    conversation.append(response.message.model_dump())
+                    conversation.append({"role": "tool", "content": tool_call.function.arguments, "tool_call_id": tool_call.id})
         assistant_text = ollama_client.chat.completions.create(
             model=model,
             messages=[{"role": "system", "content": system_prompt}] + conversation,
