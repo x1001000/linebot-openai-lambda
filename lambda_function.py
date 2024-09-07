@@ -186,7 +186,7 @@ def assistant_messages(event, user_text, model=model):
     try:
         response = ollama_client.chat.completions.create(
             model=model,
-            messages=conversation[-2:],
+            messages=conversation[-2:], # forget n focus
             tools=tools,
             ).choices[0]
         tool_calls = response.message.tool_calls
@@ -201,7 +201,7 @@ def assistant_messages(event, user_text, model=model):
                     conversation.append({"role": "tool", "content": tool_call.function.arguments, "tool_call_id": tool_call.id})
         assistant_text = ollama_client.chat.completions.create(
             model=model,
-            messages=[{"role": "system", "content": system_prompt}] + conversation,
+            messages=[{"role": "system", "content": system_prompt}] + conversation[-4:], # forget n focus
             ).choices[0].message.content
         assistant_messages.append(TextMessage(text=assistant_text))
         return assistant_messages
@@ -210,7 +210,7 @@ def assistant_messages(event, user_text, model=model):
         assistant_text = ''
     finally:
         conversation.append({"role": "assistant", "content": assistant_text})
-        item['conversation'] = conversation[-10:]
+        item['conversation'] = conversation[-5:] # log
         threads.put_item(Item={'id': source_id, 'conversation': json.dumps(item['conversation'])})
         god_mode(Q=user_text, A=assistant_text)
 
