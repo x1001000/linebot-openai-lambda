@@ -63,7 +63,7 @@ handler = WebhookHandler(channel_secret)
 def handle_text_message(event):
     user_text = event.message.text
     if event.source.type != 'user':
-        if not re.search('[Tt]-?1000', user_text):
+        if not re.search('@(GP)?T-?1000', user_text, flags=re.IGNORECASE):
             return
     with ApiClient(configuration) as api_client:
         line_bot_api = MessagingApi(api_client)
