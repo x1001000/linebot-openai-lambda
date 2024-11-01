@@ -99,11 +99,11 @@ def handle_sticker_message(event):
     )
 @handler.add(MessageEvent, message=AudioMessageContent)
 def handle_audio_message(event):
-    message_id = event.message.id
     if event.source.user_id not in whitelist and eval(f'event.source.{event.source.type}_id') not in whitelist:
         return
     with ApiClient(configuration) as api_client:
         line_bot_blob_api = MessagingApiBlob(api_client)
+    message_id = event.message.id
     message_content = line_bot_blob_api.get_message_content(message_id=message_id)
     with open(f'/tmp/{message_id}.m4a', 'wb') as tf:
         tf.write(message_content)
@@ -133,11 +133,11 @@ def handle_audio_message(event):
     )
 @handler.add(MessageEvent, message=ImageMessageContent)
 def handle_image_message(event):
-    message_id = event.message.id
     if event.source.user_id not in whitelist and eval(f'event.source.{event.source.type}_id') not in whitelist:
         return
     with ApiClient(configuration) as api_client:
         line_bot_blob_api = MessagingApiBlob(api_client)
+    message_id = event.message.id
     message_content = line_bot_blob_api.get_message_content(message_id=message_id)
     user_text = "What's in this image?"
     payload = {
