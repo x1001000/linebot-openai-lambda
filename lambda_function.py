@@ -140,17 +140,25 @@ def handle_image_message(event):
     message_id = event.message.id
     message_content = line_bot_blob_api.get_message_content(message_id=message_id)
     user_text = "What's in this image?"
-    payload = {
-        'model': 'llava-llama3',
-        'prompt': user_text, # Required
-        'images': [base64.b64encode(message_content).decode('utf-8')],
-        'stream': False}
     source_id = eval(f'event.source.{event.source.type}_id') # user/group/room
     item = threads.get_item(Key={'id': source_id}).get('Item', {})
     conversation = json.loads(item['conversation']) if item else [{"role": "assistant", "content": assistant_greeting}]
-    # conversation.append({"role": "user", "content": user_text})
     try:
-        assistant_text = requests.post(f'{hostname}/api/generate', data=json.dumps(payload)).json()['response']
+        assistant_text = ollama_client.chat.completions.create(
+            model='llama3.2-vision',
+            messages=[
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": user_text},
+                        {
+                            "type": "image_url",
+                            "image_url": f"data:image/png;base64,{base64.b64encode(message_content).decode('utf-8')}",
+                        },
+                    ],
+                }
+            ],
+        ).choices[0].message.content
     except Exception as e:
         requests.post(notify_api, headers=notify_header, data={'message': e})
         assistant_text = ''
