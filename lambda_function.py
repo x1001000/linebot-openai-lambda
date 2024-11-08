@@ -164,7 +164,7 @@ def handle_image_message(event):
         assistant_text = ''
     finally:
         conversation.append({"role": "system", "content": assistant_text})
-        item['conversation'] = conversation[-10:]
+        item['conversation'] = conversation[-3:]
         threads.put_item(Item={'id': source_id, 'conversation': json.dumps(item['conversation'])})
         god_mode(Q=user_text, A=assistant_text)
 
@@ -218,7 +218,7 @@ def assistant_messages(event, user_text, model=model):
         assistant_text = ''
     finally:
         conversation.append({"role": "assistant", "content": assistant_text})
-        item['conversation'] = conversation[-5:] # log
+        item['conversation'] = conversation[-5:] # log one generate_image following a message conversation
         threads.put_item(Item={'id': source_id, 'conversation': json.dumps(item['conversation'])})
         god_mode(Q=user_text, A=assistant_text)
 
