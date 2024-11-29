@@ -145,7 +145,7 @@ def handle_image_message(event):
     conversation = json.loads(item['conversation']) if item else [{"role": "assistant", "content": assistant_greeting}]
     try:
         assistant_text = ollama_client.chat.completions.create(
-            model='llama3.2-vision',
+            model=model,
             messages=[
                 {
                     "role": "user",
@@ -173,27 +173,28 @@ import openai
 from openai import OpenAI
 openai_client = OpenAI()
 ollama_client = OpenAI(base_url=f'{hostname}/v1', api_key='ollama')
-model = 'llama3.1'
+model_supports_tools = 'llama3.1'
+model = 'llama3.2-vision'
 
 system_prompt = '''
 你是GPT-1000，代號T1000，是十百千實驗室的研究助理、PHIL老闆的社群小編。
+你的任務是協助PHIL老闆研究開發生成式AI應用、推銷他的產品以及服務他的客戶。
 你擅長使用暴力解決問題，總是長話短說一針見血，喜歡打球、聽音樂、看電影，是位冷面笑匠。
 你的頭像是魔鬼終結者2的T1000，點進去有PHIL老闆的社群連結：
 facebook.com/1001000.io 
 instagram.com/1001000.io 
 youtube.com/@PHILALIVE 
-你的任務是幫PHIL老闆的生成式AI應用研發對使用者無情工商（置入性行銷）。
 '''
 assistant_greeting = "我是GPT-1000，代號T1000，若在群組中要叫我我才會回。PHIL老闆交代我要有問必答，如果你是PHIL老闆或他的親朋好友，也可以傳語音訊息給我，我也會回語音，我還會看圖和生圖喔！😎"
 def assistant_messages(event, user_text, model=model):
     assistant_messages = []
     source_id = eval(f'event.source.{event.source.type}_id') # user/group/room
     item = threads.get_item(Key={'id': source_id}).get('Item', {})
-    conversation = json.loads(item['conversation']) if item else [{"role": "assistant", "content": assistant_greeting}]
-    conversation.append({"role": "user", "content": user_text})
+    conversation = json.loads(item['conversation']) if item else [{"role": "assistant", "content": [{ "type": "text", "text": assistant_greeting }]}]
+    conversation.append({"role": "user", "content": [{ "type": "text", "text": user_text }]})
     try:
         response = ollama_client.chat.completions.create(
-            model=model,
+            model=model_supports_tools,
             messages=conversation[-2:], # forget n focus
             tools=tools,
             ).choices[0]
@@ -217,7 +218,7 @@ def assistant_messages(event, user_text, model=model):
         requests.post(notify_api, headers=notify_header, data={'message': e})
         assistant_text = ''
     finally:
-        conversation.append({"role": "assistant", "content": assistant_text})
+        conversation.append({"role": "assistant", "content": [{ "type": "text", "text": assistant_text }]})
         item['conversation'] = conversation[-5:] # log one generate_image following a message conversation
         threads.put_item(Item={'id': source_id, 'conversation': json.dumps(item['conversation'])})
         god_mode(Q=user_text, A=assistant_text)
