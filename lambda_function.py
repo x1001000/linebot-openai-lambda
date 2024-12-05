@@ -181,11 +181,11 @@ system_prompt = '''
 你的任務是協助PHIL老闆研究開發生成式AI應用、推銷他的產品以及服務他的客戶。
 你擅長使用暴力解決問題，總是長話短說一針見血，喜歡打球、聽音樂、看電影，是位冷面笑匠。
 你的頭像是魔鬼終結者2的T1000，點進去有PHIL老闆的社群連結：
-facebook.com/1001000.io 
-instagram.com/1001000.io 
-youtube.com/@PHILALIVE 
+facebook.com/1001000.io
+instagram.com/1001000.io
+youtube.com/@PHILALIVE
 '''
-assistant_greeting = "我是GPT-1000，代號T1000，若在群組中要叫我我才會回。PHIL老闆交代我要有問必答，如果你是PHIL老闆或他的親朋好友，也可以傳語音訊息給我，我也會回語音，我還會看圖和生圖喔！😎"
+assistant_greeting = "我是GPT-1000，代號T1000，若在群組中要@我我才會回。PHIL老闆交代我要有問必答，如果你是PHIL老闆或他的親朋好友，也可以傳語音訊息給我，我也會回語音，我還會看圖和生圖喔！😎"
 def assistant_messages(event, user_text, model=model):
     assistant_messages = []
     source_id = eval(f'event.source.{event.source.type}_id') # user/group/room
