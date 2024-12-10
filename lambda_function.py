@@ -7,7 +7,7 @@ channel_secret = os.getenv('LINE_CHANNEL_SECRET')
 hostname = os.getenv('OLLAMA_HOSTNAME')
 inference_access_token = os.getenv('HF_INFERENCE_ACCESS_TOKEN')
 inference_header = {'Authorization': f'Bearer {inference_access_token}'}
-inference_api = 'https://api-inference.huggingface.co/models/black-forest-labs/FLUX.1-schnell'
+inference_api = 'https://api-inference.huggingface.co'
 
 with open('whitelist.txt') as f:
     whitelist = [line.split()[0] for line in f]
@@ -139,13 +139,13 @@ def handle_image_message(event):
         line_bot_blob_api = MessagingApiBlob(api_client)
     message_id = event.message.id
     message_content = line_bot_blob_api.get_message_content(message_id=message_id)
-    user_text = "What's in this image?"
+    user_text = "詳細描述圖像中的細節"
     source_id = eval(f'event.source.{event.source.type}_id') # user/group/room
     item = threads.get_item(Key={'id': source_id}).get('Item', {})
     conversation = json.loads(item['conversation']) if item else [{"role": "assistant", "content": assistant_greeting}]
     try:
         assistant_text = ollama_client.chat.completions.create(
-            model=model,
+            model=model_supports_vision,
             messages=[
                 {
                     "role": "user",
@@ -163,7 +163,7 @@ def handle_image_message(event):
         requests.post(notify_api, headers=notify_header, data={'message': e})
         assistant_text = ''
     finally:
-        conversation.append({"role": "system", "content": assistant_text})
+        conversation.append({"role": "system", "content": f'使用者上傳了一張圖：{assistant_text}'})
         item['conversation'] = conversation[-3:]
         threads.put_item(Item={'id': source_id, 'conversation': json.dumps(item['conversation'])})
         god_mode(Q=user_text, A=assistant_text)
@@ -173,8 +173,11 @@ import openai
 from openai import OpenAI
 openai_client = OpenAI()
 ollama_client = OpenAI(base_url=f'{hostname}/v1', api_key='ollama')
+inference_client = OpenAI(base_url=f'{inference_api}/v1', api_key=inference_access_token)
 model_supports_tools = 'llama3.1'
-model = 'llama3.2-vision'
+model_supports_vision = 'llama3.2-vision'
+model_generates_image = 'black-forest-labs/FLUX.1-schnell'
+model_generates_text = 'meta-llama/Llama-3.3-70B-Instruct'
 
 system_prompt = '''
 你是GPT-1000，代號T1000，是十百千實驗室的研究助理、PHIL老闆的社群小編。
@@ -186,7 +189,7 @@ instagram.com/1001000.io
 youtube.com/@PHILALIVE
 '''
 assistant_greeting = "我是GPT-1000，代號T1000，若在群組中要@我我才會回。PHIL老闆交代我要有問必答，如果你是PHIL老闆或他的親朋好友，也可以傳語音訊息給我，我也會回語音，我還會看圖和生圖喔！😎"
-def assistant_messages(event, user_text, model=model):
+def assistant_messages(event, user_text):
     assistant_messages = []
     source_id = eval(f'event.source.{event.source.type}_id') # user/group/room
     item = threads.get_item(Key={'id': source_id}).get('Item', {})
@@ -208,8 +211,8 @@ def assistant_messages(event, user_text, model=model):
                     assistant_messages.append(ImageMessage(original_content_url=image_url, preview_image_url=image_url))
                     conversation.append(response.message.model_dump())
                     conversation.append({"role": "tool", "content": tool_call.function.arguments, "tool_call_id": tool_call.id})
-        assistant_text = ollama_client.chat.completions.create(
-            model=model,
+        assistant_text = inference_client.chat.completions.create(
+            model=model_generates_text,
             messages=[{"role": "system", "content": system_prompt}] + conversation[-4:], # forget n focus
             ).choices[0].message.content
         assistant_messages.append(TextMessage(text=assistant_text))
@@ -260,7 +263,7 @@ def generate_image(event, prompt):
     message_id = event.message.id
     requests.post(notify_api, headers=notify_header, data={'message': 'FLUX.1-schnell'})
     try:
-        image_content = requests.post(inference_api, headers=inference_header, data={'inputs': prompt}).content
+        image_content = requests.post(f'{inference_api}/models/{model_generates_image}', headers=inference_header, data={'inputs': prompt}).content
         with open(f'/tmp/{message_id}.jpg', 'wb') as tf:
             tf.write(image_content)
         return s3_url(f'/tmp/{message_id}.jpg')
