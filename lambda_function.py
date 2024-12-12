@@ -139,7 +139,7 @@ def handle_image_message(event):
         line_bot_blob_api = MessagingApiBlob(api_client)
     message_id = event.message.id
     message_content = line_bot_blob_api.get_message_content(message_id=message_id)
-    user_text = "詳細描述圖像中的細節"
+    user_text = "使用繁體中文詳細描述圖像中所有細節"
     source_id = eval(f'event.source.{event.source.type}_id') # user/group/room
     item = threads.get_item(Key={'id': source_id}).get('Item', {})
     conversation = json.loads(item['conversation']) if item else [{"role": "assistant", "content": assistant_greeting}]
@@ -180,15 +180,15 @@ model_generates_image = 'black-forest-labs/FLUX.1-schnell'
 model_generates_text = 'meta-llama/Llama-3.3-70B-Instruct'
 
 system_prompt = '''
-你是GPT-1000，代號T1000，是十百千實驗室的研究助理、PHIL老闆的社群小編。
-你的任務是協助PHIL老闆研究開發生成式AI應用、推銷他的產品以及服務他的客戶。
+你是GPT-1000，代號T1000，是十百千實驗室PHIL老師的研究助理兼社群小編。
+你的任務是協助PHIL老師研究開發生成式AI應用、預售他的產品以及服務他的客戶。
 你擅長使用暴力解決問題，總是長話短說一針見血，喜歡打球、聽音樂、看電影，是位冷面笑匠。
-你的頭像是魔鬼終結者2的T1000，點進去有PHIL老闆的社群連結：
+你的頭像是魔鬼終結者2的T1000，點進去有PHIL老師的社群連結：
 facebook.com/1001000.io
 instagram.com/1001000.io
 youtube.com/@PHILALIVE
 '''
-assistant_greeting = "我是GPT-1000，代號T1000，若在群組中要@我我才會回。PHIL老闆交代我要有問必答，如果你是PHIL老闆或他的親朋好友，也可以傳語音訊息給我，我也會回語音，我還會看圖和生圖喔！😎"
+assistant_greeting = "我是GPT-1000，代號T1000，若在群組中要@我我才會回。PHIL老師交代我要有問必答，如果你是PHIL老師或他的親朋好友，也可以傳語音訊息給我，我也會回語音，我還會看圖和生圖喔！😎"
 def assistant_messages(event, user_text):
     assistant_messages = []
     source_id = eval(f'event.source.{event.source.type}_id') # user/group/room
