@@ -139,25 +139,30 @@ def handle_image_message(event):
         line_bot_blob_api = MessagingApiBlob(api_client)
     message_id = event.message.id
     message_content = line_bot_blob_api.get_message_content(message_id=message_id)
-    user_text = "使用繁體中文詳細描述圖像中所有細節"
+    user_text = "Describe this image in every detail."
     source_id = eval(f'event.source.{event.source.type}_id') # user/group/room
     item = threads.get_item(Key={'id': source_id}).get('Item', {})
     conversation = json.loads(item['conversation']) if item else [{"role": "assistant", "content": assistant_greeting}]
     try:
-        assistant_text = ollama_client.chat.completions.create(
+        assistant_text = inference_client.chat.completions.create(
             model=model_supports_vision,
             messages=[
                 {
                     "role": "user",
                     "content": [
-                        {"type": "text", "text": user_text},
+                        {
+                            "type": "text",
+                            "text": user_text
+                        },
                         {
                             "type": "image_url",
-                            "image_url": f"data:image/png;base64,{base64.b64encode(message_content).decode('utf-8')}",
-                        },
-                    ],
+                            "image_url": {
+                                "url": f"data:image/jpeg;base64,{base64.b64encode(message_content).decode('utf-8')}",
+                            }
+                        }
+                    ]
                 }
-            ],
+            ]
         ).choices[0].message.content
     except Exception as e:
         requests.post(notify_api, headers=notify_header, data={'message': e})
@@ -174,10 +179,10 @@ from openai import OpenAI
 openai_client = OpenAI()
 ollama_client = OpenAI(base_url=f'{hostname}/v1', api_key='ollama')
 inference_client = OpenAI(base_url=f'{inference_api}/v1', api_key=inference_access_token)
-model_supports_tools = 'llama3.1'
-model_supports_vision = 'llama3.2-vision'
-model_generates_image = 'black-forest-labs/FLUX.1-schnell'
+model_supports_tools = 'meta-llama/Llama-3.1-70B-Instruct'
+model_supports_vision = 'meta-llama/Llama-3.2-11B-Vision-Instruct'
 model_generates_text = 'meta-llama/Llama-3.3-70B-Instruct'
+model_generates_image = 'black-forest-labs/FLUX.1-schnell'
 
 system_prompt = '''
 你是GPT-1000，代號T1000，是十百千實驗室PHIL老師的研究助理兼社群小編。
@@ -196,21 +201,23 @@ def assistant_messages(event, user_text):
     conversation = json.loads(item['conversation']) if item else [{"role": "assistant", "content": [{ "type": "text", "text": assistant_greeting }]}]
     conversation.append({"role": "user", "content": [{ "type": "text", "text": user_text }]})
     try:
-        response = ollama_client.chat.completions.create(
+        response = inference_client.chat.completions.create(
             model=model_supports_tools,
             messages=conversation[-2:], # forget n focus
             tools=tools,
-            ).choices[0]
-        tool_calls = response.message.tool_calls
+            )
+        message = response.choices[0].message
+        tool_calls = message.tool_calls
         if tool_calls: # prevent None from for-loop
             for tool_call in tool_calls:
-                requests.post(notify_api, headers=notify_header, data={'message': str(tool_call)})
+                requests.post(notify_api, headers=notify_header, data={'message': tool_call.model_dump_json(exclude_none=True)})
                 if tool_call.function.name == 'generate_image':
-                    prompt = json.loads(tool_call.function.arguments)['prompt in English']
+                    prompt = tool_call.function.arguments['prompt in English']
                     image_url = generate_image(event, prompt)
                     assistant_messages.append(ImageMessage(original_content_url=image_url, preview_image_url=image_url))
-                    conversation.append(response.message.model_dump())
-                    conversation.append({"role": "tool", "content": tool_call.function.arguments, "tool_call_id": tool_call.id})
+                    conversation.append(message.model_dump(exclude_none=True))
+                    conversation[-1]['content'] = '' # can't be None nor missing field
+                    conversation.append({"role": "tool", "content": json.dumps(tool_call.function.arguments), "tool_call_id": tool_call.id})
         assistant_text = inference_client.chat.completions.create(
             model=model_generates_text,
             messages=[{"role": "system", "content": system_prompt}] + conversation[-4:], # forget n focus
@@ -249,6 +256,7 @@ tools = [
         'function': {
             'name': 'describe_image',
             'description': 'Call this function when user asks you to describe some image',
+            'parameters': {}
         }
     },
     {
@@ -256,6 +264,7 @@ tools = [
         'function': {
             'name': 'reply',
             'description': 'Call this function when user asks you something',
+            'parameters': {}
         }
     },
 ]
