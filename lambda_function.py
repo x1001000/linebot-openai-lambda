@@ -219,10 +219,14 @@ def assistant_messages(event, user_text):
                     conversation.append(message.model_dump(exclude_none=True))
                     conversation[-1]['content'] = '' # can't be None nor missing field
                     conversation.append({"role": "tool", "content": json.dumps(tool_call.function.arguments), "tool_call_id": tool_call.id})
-        assistant_text = inference_client.chat.completions.create(
+        stream = inference_client.chat.completions.create(
             model=model_generates_text,
             messages=[{"role": "system", "content": system_prompt}] + conversation[-4:], # forget n focus
-            ).choices[0].message.content
+	        stream=True
+            )
+        assistant_text = ''
+        for chunk in stream:
+            assistant_text += chunk.choices[0].delta.content
         assistant_messages.append(TextMessage(text=assistant_text))
         return assistant_messages
     except Exception as e:
