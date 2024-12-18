@@ -162,7 +162,8 @@ def handle_image_message(event):
                         }
                     ]
                 }
-            ]
+            ],
+            max_tokens = 4096 - 44 # `inputs` tokens + `max_new_tokens` must be <= 4096. Given: 44 `inputs` tokens
         ).choices[0].message.content
     except Exception as e:
         requests.post(notify_api, headers=notify_header, data={'message': e})
