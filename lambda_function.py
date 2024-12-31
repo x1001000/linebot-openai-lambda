@@ -180,9 +180,9 @@ from openai import OpenAI
 openai_client = OpenAI()
 ollama_client = OpenAI(base_url=f'{hostname}/v1', api_key='ollama')
 inference_client = OpenAI(base_url=f'{inference_api}/v1', api_key=inference_access_token)
-model_supports_tools = 'meta-llama/Llama-3.1-70B-Instruct'
+model_supports_tools = 'Qwen/Qwen2.5-72B-Instruct'
 model_supports_vision = 'meta-llama/Llama-3.2-11B-Vision-Instruct'
-model_generates_text = 'meta-llama/Llama-3.3-70B-Instruct'
+model_generates_text = 'Qwen/Qwen2.5-72B-Instruct'
 model_generates_image = 'black-forest-labs/FLUX.1-schnell'
 
 system_prompt = '''
