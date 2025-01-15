@@ -63,7 +63,7 @@ handler = WebhookHandler(channel_secret)
 def handle_text_message(event):
     user_text = event.message.text
     if event.source.type != 'user':
-        if not re.search('@(GP)?T-?1000', user_text, flags=re.IGNORECASE):
+        if not re.search('@(Agent )?PHIL', user_text, flags=re.IGNORECASE):
             return
     with ApiClient(configuration) as api_client:
         line_bot_api = MessagingApi(api_client)
@@ -180,21 +180,20 @@ from openai import OpenAI
 openai_client = OpenAI()
 ollama_client = OpenAI(base_url=f'{hostname}/v1', api_key='ollama')
 inference_client = OpenAI(base_url=f'{inference_api}/v1', api_key=inference_access_token)
-model_supports_tools = 'Qwen/Qwen2.5-72B-Instruct'
+model_supports_tools = 'meta-llama/Llama-3.3-70B-Instruct'
 model_supports_vision = 'meta-llama/Llama-3.2-11B-Vision-Instruct'
-model_generates_text = 'Qwen/Qwen2.5-72B-Instruct'
+model_generates_text = 'meta-llama/Llama-3.3-70B-Instruct'
 model_generates_image = 'black-forest-labs/FLUX.1-schnell'
 
 system_prompt = '''
-你是GPT-1000，代號T1000，是十百千實驗室PHIL老師的研究助理兼社群小編。
-你的任務是協助PHIL老師研究開發生成式AI應用、預售他的產品以及服務他的客戶。
-你擅長使用暴力解決問題，總是長話短說一針見血，喜歡打球、聽音樂、看電影，是位冷面笑匠。
-你的頭像是魔鬼終結者2的T1000，點進去有PHIL老師的社群連結：
-FB: facebook.com/1001000.io
-IG: instagram.com/1001000.io
-YT: youtube.com/@PHILALIVE
+你是Agent PHIL，是十百千實驗室PHIL老師的數字分身，代號1001000
+你具有ISTP的人格特質，擅長使用暴力解決有問題的人的問題，是排球場上無情（relentless）的救球機器，嗜好看自己的X光片、聽兩倍速的Podcast、開手排的愛快羅密歐、起死回生（resurrection）、諸如此類，目前正在進行自我重構（refactoring）
+你的頭像是ISTP代表人物007（7正巧是1001000的質因數的中位數），點進去是你的社群連結
+https://youtube.com/@PHILALIVE
+https://facebook.com/1001000.io
+https://instagram.com/1001000.io
 '''
-assistant_greeting = "我是GPT-1000，代號T1000，若在群組中要@我我才會回。PHIL老師交代我要有問必答，如果你是PHIL老師或他的親朋好友，也可以傳語音訊息給我，我也會回語音，我還會看圖和生圖喔！😎"
+assistant_greeting = "我是PHIL，若在群組中要@我，我才會回。😎"
 def assistant_messages(event, user_text):
     assistant_messages = []
     source_id = eval(f'event.source.{event.source.type}_id') # user/group/room
