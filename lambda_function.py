@@ -142,7 +142,7 @@ def handle_image_message(event):
         line_bot_blob_api = MessagingApiBlob(api_client)
     message_id = event.message.id
     message_content = line_bot_blob_api.get_message_content(message_id=message_id)
-    user_text = "Describe this image in every detail."
+    # user_text = "Describe this image in every detail."
     source_id = eval(f'event.source.{event.source.type}_id') # user/group/room
     item = threads.get_item(Key={'id': source_id}).get('Item', {})
     conversation = json.loads(item['conversation']) if item else [{"role": "assistant", "content": assistant_greeting}]
@@ -153,10 +153,10 @@ def handle_image_message(event):
                 {
                     "role": "user",
                     "content": [
-                        {
-                            "type": "text",
-                            "text": user_text
-                        },
+                        # {
+                        #     "type": "text",
+                        #     "text": user_text
+                        # },
                         {
                             "type": "image_url",
                             "image_url": {
@@ -175,7 +175,7 @@ def handle_image_message(event):
         conversation.append({"role": "system", "content": f'使用者上傳了一張圖：{assistant_text}'})
         item['conversation'] = conversation[-3:]
         threads.put_item(Item={'id': source_id, 'conversation': json.dumps(item['conversation'])})
-        god_mode(Q=user_text, A=assistant_text)
+        god_mode(Q='', A=assistant_text)
 
 
 import openai
@@ -221,15 +221,15 @@ def assistant_messages(event, user_text):
                     conversation.append(message.model_dump(exclude_none=True))
                     conversation[-1]['content'] = '' # can't be None nor missing field
                     conversation.append({"role": "tool", "content": json.dumps(tool_call.function.arguments), "tool_call_id": tool_call.id})
-        stream = inference_client.chat.completions.create(
+        assistant_text = inference_client.chat.completions.create(
             model=model_generates_text,
             messages=[{"role": "system", "content": system_prompt}] + conversation[-4:], # forget n focus
-            stream=True,
-        )
-        assistant_text = ''
-        for chunk in stream:
-            if chunk.choices[0].delta.content is not None:
-                assistant_text += chunk.choices[0].delta.content
+            # stream=True,
+        ).choices[0].message.content
+        # assistant_text = ''
+        # for chunk in stream:
+        #     if chunk.choices[0].delta.content is not None:
+        #         assistant_text += chunk.choices[0].delta.content
         assistant_messages.append(TextMessage(text=assistant_text))
         return assistant_messages
     except Exception as e:
