@@ -63,7 +63,10 @@ handler = WebhookHandler(channel_secret)
 def handle_text_message(event):
     user_text = event.message.text
     if event.source.type != 'user':
-        if not re.search('@(Agent )?PHIL', user_text, flags=re.IGNORECASE):
+        m = re.search('@(Agent )?PHIL', user_text, flags=re.IGNORECASE)
+        if m:
+            user_text = user_text.replace(m.group(), 'PHIL')
+        else:
             return
     with ApiClient(configuration) as api_client:
         line_bot_api = MessagingApi(api_client)
