@@ -9,8 +9,6 @@ inference_access_token = os.getenv('HF_INFERENCE_ACCESS_TOKEN')
 inference_header = {'Authorization': f'Bearer {inference_access_token}'}
 inference_api = 'https://api-inference.huggingface.co'
 
-with open('whitelist.txt') as f:
-    whitelist = [line.split()[0] for line in f]
 
 import requests
 requests.post(notify_api, headers=notify_header, data={'message': 'lambda_function.py'})
@@ -58,6 +56,16 @@ from linebot.v3.messaging import (
     ImageMessage
 )
 configuration = Configuration(access_token=channel_access_token)
+with ApiClient(configuration) as api_client:
+    line_bot_api = MessagingApi(api_client)
+    line_bot_blob_api = MessagingApiBlob(api_client)
+def show_loading_animation(event):
+    line_bot_api.show_loading_animation(
+        ShowLoadingAnimationRequest(
+            chat_id=event.source.user_id,
+            # loading_seconds=5
+        )
+    )
 handler = WebhookHandler(channel_secret)
 @handler.add(MessageEvent, message=TextMessageContent)
 def handle_text_message(event):
@@ -68,14 +76,7 @@ def handle_text_message(event):
             user_text = user_text.replace(m.group(), 'PHIL')
         else:
             return
-    with ApiClient(configuration) as api_client:
-        line_bot_api = MessagingApi(api_client)
-    line_bot_api.show_loading_animation(
-        ShowLoadingAnimationRequest(
-            chat_id=event.source.user_id,
-            # loading_seconds=5
-        )
-    )
+    show_loading_animation(event)
     line_bot_api.reply_message(
         ReplyMessageRequest(
             reply_token=event.reply_token,
@@ -86,63 +87,50 @@ def handle_text_message(event):
 def handle_sticker_message(event):
     if event.source.type != 'user':
         return
-    with ApiClient(configuration) as api_client:
-        line_bot_api = MessagingApi(api_client)
-    line_bot_api.show_loading_animation(
-        ShowLoadingAnimationRequest(
-            chat_id=event.source.user_id,
-            # loading_seconds=5
-        )
-    )
+    show_loading_animation(event)
     line_bot_api.reply_message(
         ReplyMessageRequest(
             reply_token=event.reply_token,
-            messages=[TextMessage(text='$', emojis=[{'index': 0, 'productId': '5ac21c46040ab15980c9b442', 'emojiId': '138'}])]
+            messages=[
+                TextMessage(text='$', emojis=[{'index': 0, 'productId': '5ac21c46040ab15980c9b442', 'emojiId': '138'}])
+            ]
         )
     )
 @handler.add(MessageEvent, message=AudioMessageContent)
 def handle_audio_message(event):
-    if event.source.user_id not in whitelist and eval(f'event.source.{event.source.type}_id') not in whitelist:
-        return
-    with ApiClient(configuration) as api_client:
-        line_bot_blob_api = MessagingApiBlob(api_client)
     message_id = event.message.id
     message_content = line_bot_blob_api.get_message_content(message_id=message_id)
-    with open(f'/tmp/{message_id}.m4a', 'wb') as tf:
-        tf.write(message_content)
-    transcript = openai_client.audio.transcriptions.create(
-        model='whisper-1',
-        file=open(f'/tmp/{message_id}.m4a', 'rb'),
-        response_format='text'
-        ).strip()
+    # with open(f'/tmp/{message_id}.m4a', 'wb') as tf:
+    #     tf.write(message_content)
+    # transcript = openai_client.audio.transcriptions.create(
+    #     model='whisper-1',
+    #     file=open(f'/tmp/{message_id}.m4a', 'rb'),
+    #     response_format='text'
+    #     ).strip()
+    transcript = requests.post(f'{inference_api}/models/{model_generates_transcript}', headers=inference_header, data=message_content).json().get('text')
+    if not transcript:
+        requests.post(notify_api, headers=notify_header, data={'message': 'HF not loading!?'})
+        return
+    show_loading_animation(event)
     messages = assistant_messages(event, transcript)
-    openai_client.audio.speech.create(model='tts-1', voice='onyx', input=messages[-1].text).stream_to_file(f'/tmp/{message_id}.mp3')
-    with ApiClient(configuration) as api_client:
-        line_bot_api = MessagingApi(api_client)
-    line_bot_api.show_loading_animation(
-        ShowLoadingAnimationRequest(
-            chat_id=event.source.user_id,
-            # loading_seconds=5
-        )
-    )
+    # openai_client.audio.speech.create(model='tts-1', voice='onyx', input=messages[-1].text).stream_to_file(f'/tmp/{message_id}.mp3')
+    edge_tts.Communicate(messages[-1].text, voice).save_sync(f'/tmp/{message_id}.mp3')
     line_bot_api.reply_message(
         ReplyMessageRequest(
             reply_token=event.reply_token,
             messages=messages + [
                 AudioMessage(
                     original_content_url=s3_url(f'/tmp/{message_id}.mp3'),
-                    duration=60000)]
+                    duration=60000
+                )
+            ]
         )
     )
 @handler.add(MessageEvent, message=ImageMessageContent)
 def handle_image_message(event):
-    if event.source.user_id not in whitelist and eval(f'event.source.{event.source.type}_id') not in whitelist:
-        return
-    with ApiClient(configuration) as api_client:
-        line_bot_blob_api = MessagingApiBlob(api_client)
     message_id = event.message.id
     message_content = line_bot_blob_api.get_message_content(message_id=message_id)
-    # user_text = "Describe this image in every detail."
+    user_text = "Describe this image in every detail."
     source_id = eval(f'event.source.{event.source.type}_id') # user/group/room
     item = threads.get_item(Key={'id': source_id}).get('Item', {})
     conversation = json.loads(item['conversation']) if item else [{"role": "assistant", "content": assistant_greeting}]
@@ -153,10 +141,10 @@ def handle_image_message(event):
                 {
                     "role": "user",
                     "content": [
-                        # {
-                        #     "type": "text",
-                        #     "text": user_text
-                        # },
+                        {
+                            "type": "text",
+                            "text": user_text
+                        },
                         {
                             "type": "image_url",
                             "image_url": {
@@ -175,7 +163,7 @@ def handle_image_message(event):
         conversation.append({"role": "system", "content": f'使用者上傳了一張圖：{assistant_text}'})
         item['conversation'] = conversation[-3:]
         threads.put_item(Item={'id': source_id, 'conversation': json.dumps(item['conversation'])})
-        god_mode(Q='', A=assistant_text)
+        god_mode(Q=user_text, A=assistant_text)
 
 
 import openai
@@ -187,6 +175,9 @@ model_supports_tools = 'meta-llama/Llama-3.3-70B-Instruct'
 model_supports_vision = 'meta-llama/Llama-3.2-11B-Vision-Instruct'
 model_generates_text = 'meta-llama/Llama-3.3-70B-Instruct'
 model_generates_image = 'black-forest-labs/FLUX.1-schnell'
+model_generates_transcript = 'openai/whisper-large-v3'
+import edge_tts
+voice = 'zh-CN-YunXiNeural'
 
 system_prompt = '''
 你是Agent PHIL，是十百千實驗室PHIL老師的數字分身，代號1001000
@@ -220,7 +211,7 @@ def assistant_messages(event, user_text):
                     assistant_messages.append(ImageMessage(original_content_url=image_url, preview_image_url=image_url))
                     conversation.append(message.model_dump(exclude_none=True))
                     conversation[-1]['content'] = '' # can't be None nor missing field
-                    conversation.append({"role": "tool", "content": json.dumps(tool_call.function.arguments), "tool_call_id": tool_call.id})
+                    conversation.append({"role": "tool", "content": prompt, "tool_call_id": tool_call.id})
         assistant_text = inference_client.chat.completions.create(
             model=model_generates_text,
             messages=[{"role": "system", "content": system_prompt}] + conversation[-4:], # forget n focus
