@@ -107,9 +107,16 @@ def handle_audio_message(event):
     #     file=open(f'/tmp/{message_id}.m4a', 'rb'),
     #     response_format='text'
     #     ).strip()
-    transcript = requests.post(f'{inference_api}/models/{model_generates_transcript}', headers=inference_header, data=message_content).json().get('text')
-    if not transcript:
-        requests.post(notify_api, headers=notify_header, data={'message': 'HF not loading!?'})
+    requests.post(notify_api, headers=notify_header, data={'message': model_generates_transcript})
+    try:
+        d = requests.post(f'{inference_api}/models/{model_generates_transcript}', headers=inference_header, data=message_content).json()
+        transcript = d.get('text')
+        error = d.get('error')
+        if error:
+            requests.post(notify_api, headers=notify_header, data={'message': error})
+            return
+    except Exception as e:
+        requests.post(notify_api, headers=notify_header, data={'message': e})
         return
     show_loading_animation(event)
     messages = assistant_messages(event, transcript)
@@ -120,7 +127,7 @@ def handle_audio_message(event):
             reply_token=event.reply_token,
             messages=messages + [
                 AudioMessage(
-                    original_content_url=s3_url(f'/tmp/{message_id}.mp3'),
+                    original_content_url=s3_object_url(f'/tmp/{message_id}.mp3'),
                     duration=60000
                 )
             ]
@@ -130,47 +137,21 @@ def handle_audio_message(event):
 def handle_image_message(event):
     message_id = event.message.id
     message_content = line_bot_blob_api.get_message_content(message_id=message_id)
-    user_text = "Describe this image in every detail."
     source_id = eval(f'event.source.{event.source.type}_id') # user/group/room
-    item = threads.get_item(Key={'id': source_id}).get('Item', {})
-    conversation = json.loads(item['conversation']) if item else [{"role": "assistant", "content": assistant_greeting}]
-    try:
-        assistant_text = inference_client.chat.completions.create(
-            model=model_supports_vision,
-            messages=[
-                {
-                    "role": "user",
-                    "content": [
-                        {
-                            "type": "text",
-                            "text": user_text
-                        },
-                        {
-                            "type": "image_url",
-                            "image_url": {
-                                "url": f"data:image/jpeg;base64,{base64.b64encode(message_content).decode('utf-8')}",
-                            }
-                        }
-                    ]
-                }
-            ],
-            max_tokens = 4096 - 44 # `inputs` tokens + `max_new_tokens` must be <= 4096. Given: 44 `inputs` tokens
-        ).choices[0].message.content
-    except Exception as e:
-        requests.post(notify_api, headers=notify_header, data={'message': e})
-        assistant_text = ''
-    finally:
-        conversation.append({"role": "system", "content": f'使用者上傳了一張圖：{assistant_text}'})
-        item['conversation'] = conversation[-3:]
-        threads.put_item(Item={'id': source_id, 'conversation': json.dumps(item['conversation'])})
-        god_mode(Q=user_text, A=assistant_text)
+    with open(f'/tmp/{source_id}.jpg', 'wb') as tf:
+        tf.write(message_content)
+    s3_object_url(f'/tmp/{source_id}.jpg')
 
 
-import openai
-from openai import OpenAI
-openai_client = OpenAI()
-ollama_client = OpenAI(base_url=f'{hostname}/v1', api_key='ollama')
-inference_client = OpenAI(base_url=f'{inference_api}/v1', api_key=inference_access_token)
+# from openai import OpenAI
+# openai_client = OpenAI()
+# ollama_client = OpenAI(base_url=f'{hostname}/v1', api_key='ollama')
+# model_supports_tools = 'llama3.2'
+# model_supports_vision = 'llama3.2-vision'
+# model_generates_text = 'llama3.2-vision'
+# inference_client = OpenAI(base_url=f'{inference_api}/v1', api_key=inference_access_token)
+from huggingface_hub import InferenceClient
+inference_client = InferenceClient(api_key=inference_access_token)
 model_supports_tools = 'meta-llama/Llama-3.3-70B-Instruct'
 model_supports_vision = 'meta-llama/Llama-3.2-11B-Vision-Instruct'
 model_generates_text = 'meta-llama/Llama-3.3-70B-Instruct'
@@ -197,30 +178,51 @@ def assistant_messages(event, user_text):
     try:
         response = inference_client.chat.completions.create(
             model=model_supports_tools,
-            messages=conversation[-2:], # forget n focus
+            messages=conversation[-1:],
             tools=tools,
         )
         message = response.choices[0].message
+        message['content'] = '' # content can't be None nor missing field
         tool_calls = message.tool_calls
         if tool_calls: # prevent None from for-loop
             for tool_call in tool_calls:
-                requests.post(notify_api, headers=notify_header, data={'message': tool_call.model_dump_json(exclude_none=True)})
-                if tool_call.function.name == 'generate_image':
-                    prompt = tool_call.function.arguments['prompt in English']
+                # requests.post(notify_api, headers=notify_header, data={'message': tool_call.model_dump_json(exclude_none=True)})
+                requests.post(notify_api, headers=notify_header, data={'message': json.dumps(tool_call)})
+                name = tool_call.function.name
+                args = tool_call.function.arguments
+                args = json.loads(args) if type(args) is str else args
+                if name == 'generate_image':
+                    prompt = args['prompt in English']
                     image_url = generate_image(event, prompt)
                     assistant_messages.append(ImageMessage(original_content_url=image_url, preview_image_url=image_url))
-                    conversation.append(message.model_dump(exclude_none=True))
-                    conversation[-1]['content'] = '' # can't be None nor missing field
-                    conversation.append({"role": "tool", "content": prompt, "tool_call_id": tool_call.id})
-        assistant_text = inference_client.chat.completions.create(
+                    # conversation.append(message.model_dump(exclude_none=True))
+                    conversation.append(message)
+                    conversation.append({
+                        "role": "tool",
+                        "tool_call_id": tool_call.id,
+                        "content": '✅'
+                    })
+                if name == 'describe_image':
+                    question = args['question in English']
+                    result = describe_image(event, question)
+                    # conversation.append(message.model_dump(exclude_none=True))
+                    conversation.append(message)
+                    conversation.append({
+                        "role": "tool",
+                        "tool_call_id": tool_call.id,
+                        "content": result
+                    })
+        response = inference_client.chat.completions.create(
             model=model_generates_text,
-            messages=[{"role": "system", "content": system_prompt}] + conversation[-4:], # forget n focus
-            # stream=True,
-        ).choices[0].message.content
-        # assistant_text = ''
-        # for chunk in stream:
-        #     if chunk.choices[0].delta.content is not None:
-        #         assistant_text += chunk.choices[0].delta.content
+            messages=[{"role": "system", "content": system_prompt}] + conversation,
+            stream=True, # fix 504 Server Error: Gateway Time-out
+        )
+        # assistant_text = response.choices[0].message.content
+        stream = response
+        assistant_text = ''
+        for chunk in stream:
+            if chunk.choices[0].delta.content is not None:
+                assistant_text += chunk.choices[0].delta.content
         assistant_messages.append(TextMessage(text=assistant_text))
         return assistant_messages
     except Exception as e:
@@ -228,7 +230,7 @@ def assistant_messages(event, user_text):
         assistant_text = ''
     finally:
         conversation.append({"role": "assistant", "content": [{ "type": "text", "text": assistant_text }]})
-        item['conversation'] = conversation[-5:] # log one generate_image following a message conversation
+        item['conversation'] = conversation[-10:]
         threads.put_item(Item={'id': source_id, 'conversation': json.dumps(item['conversation'])})
         god_mode(Q=user_text, A=assistant_text)
 
@@ -255,7 +257,16 @@ tools = [
         'function': {
             'name': 'describe_image',
             'description': 'Call this function when user asks you to describe some image',
-            'parameters': {}
+            'parameters': {
+                'type': 'object',
+                'properties': {
+                    'question in English': {
+                        'type': 'string',
+                        'description': "If user's question is not English, you have to translate it into English.",
+                    },
+                },
+                'required': ['question in English']
+            }
         }
     },
     {
@@ -269,15 +280,49 @@ tools = [
 ]
 def generate_image(event, prompt):
     message_id = event.message.id
-    requests.post(notify_api, headers=notify_header, data={'message': 'FLUX.1-schnell'})
+    requests.post(notify_api, headers=notify_header, data={'message': model_generates_image})
     try:
         image_content = requests.post(f'{inference_api}/models/{model_generates_image}', headers=inference_header, data={'inputs': prompt}).content
         with open(f'/tmp/{message_id}.jpg', 'wb') as tf:
             tf.write(image_content)
-        return s3_url(f'/tmp/{message_id}.jpg')
+        return s3_object_url(f'/tmp/{message_id}.jpg')
     except Exception as e:
         requests.post(notify_api, headers=notify_header, data={'message': e})
-
+def describe_image(event, question):
+    source_id = eval(f'event.source.{event.source.type}_id') # user/group/room
+    requests.post(notify_api, headers=notify_header, data={'message': model_supports_vision})
+    image_url = s3_object_url(source_id=source_id)
+    r = requests.get(image_url)
+    if r.status_code != 200:
+        return 'Image not found!'
+    # image_content = r.content
+    # image_base64 = base64.b64encode(image_content).decode('utf-8')
+    try:
+        response = inference_client.chat.completions.create(
+            model=model_supports_vision,
+            messages=[
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": question
+                        },
+                        {
+                            "type": "image_url",
+                            "image_url": {
+                                # "url": f"data:image/png;base64,{image_base64}",
+                                'url': image_url,
+                            }
+                        }
+                    ]
+                }
+            ],
+            max_tokens = 3072#4096 - 44 # `inputs` tokens + `max_new_tokens` must be <= 4096. Given: 44 `inputs` tokens
+        )
+        return response.choices[0].message.content
+    except Exception as e:
+        requests.post(notify_api, headers=notify_header, data={'message': e})
 
 import json
 
@@ -294,8 +339,11 @@ def lambda_handler(event, context):
 
 import boto3
 threads = boto3.resource('dynamodb').Table('threads')
-def s3_url(file_path):
-    object_path = f'GPT-1000/{file_path[5:]}'
-    bucket_name = 'x1001000-public'
-    boto3.client('s3').upload_file(file_path, bucket_name, object_path)
-    return f'https://{bucket_name}.s3.ap-northeast-1.amazonaws.com/{object_path}'
+def s3_object_url(filename=None, source_id=None):
+    bucket = 'x1001000-public'
+    if filename:
+        key = f'Agent-PHIL/{filename[5:]}'
+        boto3.client('s3').upload_file(filename, bucket, key)
+    else:
+        key = f'Agent-PHIL/{source_id}.jpg'
+    return f'https://{bucket}.s3.ap-northeast-1.amazonaws.com/{key}'
