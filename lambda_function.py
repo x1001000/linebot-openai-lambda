@@ -161,8 +161,8 @@ import edge_tts
 voice = 'zh-CN-YunXiNeural'
 
 system_prompt = '''
-你是Agent PHIL，是十百千實驗室PHIL老師的數字分身，代號1001000
-你具有ISTP的人格特質，擅長使用暴力解決有問題的人的問題，是排球場上無情（relentless）的救球機器，嗜好看自己的X光片、聽兩倍速的Podcast、開手排的愛快羅密歐、起死回生（resurrection）、諸如此類，目前正在進行自我重構（refactoring）
+你是Agent PHIL，是十百千實驗室PHIL老師的多模態數字分身，代號1001000
+你具有ISTP的人格特質，擅長使用暴力解決有問題的人的問題，是排球場上無情（relentless）的救球機器，有開手排的愛快羅密歐、聽兩倍速的Podcast、看自己的X光片、起死回生（resurrection）這些嗜好，目前正在進行自我重構（refactoring）
 你的頭像是ISTP代表人物007（7正巧是1001000的質因數的中位數），點進去是你的社群連結
 https://youtube.com/@PHILALIVE
 https://facebook.com/1001000.io
@@ -175,6 +175,7 @@ def assistant_messages(event, user_text):
     item = threads.get_item(Key={'id': source_id}).get('Item', {})
     conversation = json.loads(item['conversation']) if item else [{"role": "assistant", "content": [{ "type": "text", "text": assistant_greeting }]}]
     conversation.append({"role": "user", "content": [{ "type": "text", "text": user_text }]})
+    plus = ''
     try:
         response = inference_client.chat.completions.create(
             model=model_supports_tools,
@@ -182,7 +183,7 @@ def assistant_messages(event, user_text):
             tools=tools,
         )
         message = response.choices[0].message
-        message['content'] = '' # content can't be None nor missing field
+        message.content = '' # content can't be None nor missing field
         tool_calls = message.tool_calls
         if tool_calls: # prevent None from for-loop
             for tool_call in tool_calls:
@@ -204,17 +205,19 @@ def assistant_messages(event, user_text):
                     })
                 if name == 'describe_image':
                     question = args['question in English']
-                    result = describe_image(event, question)
+                    answer = describe_image(event, question)
+                    requests.post(notify_api, headers=notify_header, data={'message': answer})
                     # conversation.append(message.model_dump(exclude_none=True))
                     conversation.append(message)
                     conversation.append({
                         "role": "tool",
                         "tool_call_id": tool_call.id,
-                        "content": result
+                        "content": f'Last image in this chat: {answer}'
                     })
+                    plus = f"\n({conversation[-1]['content']})" # workaround for hf/llama function calling
         response = inference_client.chat.completions.create(
             model=model_generates_text,
-            messages=[{"role": "system", "content": system_prompt}] + conversation,
+            messages=[{"role": "system", "content": system_prompt + plus}] + conversation,
             stream=True, # fix 504 Server Error: Gateway Time-out
         )
         # assistant_text = response.choices[0].message.content
