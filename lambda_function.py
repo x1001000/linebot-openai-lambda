@@ -71,9 +71,8 @@ handler = WebhookHandler(channel_secret)
 def handle_text_message(event):
     user_text = event.message.text
     if event.source.type != 'user':
-        m = re.search('@(Agent )?PHIL', user_text, flags=re.IGNORECASE)
-        if m:
-            user_text = user_text.replace(m.group(), 'PHIL')
+        if m := re.search('@(Agent )?PHIL', user_text, flags=re.IGNORECASE):
+            user_text = user_text.replace(m.group(), m.group()[1:])
         else:
             return
     show_loading_animation(event)
@@ -154,7 +153,7 @@ from huggingface_hub import InferenceClient
 inference_client = InferenceClient(api_key=inference_access_token)
 model_supports_tools = 'meta-llama/Llama-3.3-70B-Instruct'
 model_supports_vision = 'meta-llama/Llama-3.2-11B-Vision-Instruct'
-model_generates_text = 'meta-llama/Llama-3.3-70B-Instruct'
+model_generates_text = 'deepseek-ai/DeepSeek-R1-Distill-Qwen-32B'
 model_generates_image = 'black-forest-labs/FLUX.1-schnell'
 model_generates_transcript = 'openai/whisper-large-v3'
 import edge_tts
@@ -167,13 +166,15 @@ system_prompt = '''
 https://youtube.com/@PHILALIVE
 https://facebook.com/1001000.io
 https://instagram.com/1001000.io
+
+切勿使用簡體中文，務必使用繁體中文
 '''
-assistant_greeting = "我是PHIL，若在群組中要@我，我才會回。😎"
+
 def assistant_messages(event, user_text):
     assistant_messages = []
     source_id = eval(f'event.source.{event.source.type}_id') # user/group/room
     item = threads.get_item(Key={'id': source_id}).get('Item', {})
-    conversation = json.loads(item['conversation']) if item else [{"role": "assistant", "content": [{ "type": "text", "text": assistant_greeting }]}]
+    conversation = json.loads(item['conversation']) if item else []
     conversation.append({"role": "user", "content": [{ "type": "text", "text": user_text }]})
     plus = ''
     try:
@@ -226,7 +227,7 @@ def assistant_messages(event, user_text):
         for chunk in stream:
             if chunk.choices[0].delta.content is not None:
                 assistant_text += chunk.choices[0].delta.content
-        assistant_messages.append(TextMessage(text=assistant_text))
+        assistant_messages.append(TextMessage(text=assistant_text.replace('think>', '內心小劇場>')))
         return assistant_messages
     except Exception as e:
         requests.post(notify_api, headers=notify_header, data={'message': e})
@@ -326,6 +327,7 @@ def describe_image(event, question):
         return response.choices[0].message.content
     except Exception as e:
         requests.post(notify_api, headers=notify_header, data={'message': e})
+
 
 import json
 
