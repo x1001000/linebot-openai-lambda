@@ -153,7 +153,7 @@ from huggingface_hub import InferenceClient
 inference_client = InferenceClient(api_key=inference_access_token)
 model_supports_tools = 'meta-llama/Llama-3.3-70B-Instruct'
 model_supports_vision = 'meta-llama/Llama-3.2-11B-Vision-Instruct'
-model_generates_text = 'deepseek-ai/DeepSeek-R1-Distill-Qwen-32B'
+model_generates_text = 'meta-llama/Llama-3.3-70B-Instruct'
 model_generates_image = 'black-forest-labs/FLUX.1-schnell'
 model_generates_transcript = 'openai/whisper-large-v3'
 import edge_tts
@@ -166,8 +166,6 @@ system_prompt = '''
 https://youtube.com/@PHILALIVE
 https://facebook.com/1001000.io
 https://instagram.com/1001000.io
-
-切勿使用簡體中文，務必使用繁體中文
 '''
 
 def assistant_messages(event, user_text):
@@ -227,7 +225,7 @@ def assistant_messages(event, user_text):
         for chunk in stream:
             if chunk.choices[0].delta.content is not None:
                 assistant_text += chunk.choices[0].delta.content
-        assistant_messages.append(TextMessage(text=assistant_text.replace('think>', '內心小劇場>')))
+        assistant_messages.append(TextMessage(text=assistant_text))
         return assistant_messages
     except Exception as e:
         requests.post(notify_api, headers=notify_header, data={'message': e})
